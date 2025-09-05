@@ -1,13 +1,13 @@
 .PHONY: migrate seed run test
 
 migrate:
-\talembic -c alembic.ini upgrade head
+	alembic -c alembic.ini upgrade head
 
 seed:
-\tpython -m app.db.seed
+	python -m app.db.seed
 
 run:
-\tuvicorn app.main:app --reload
+	uvicorn app.main:app --reload
 
 test:
-\tpytest -q
+	pytest -q
