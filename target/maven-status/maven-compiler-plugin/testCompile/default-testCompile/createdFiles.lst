@@ -1,0 +1,5 @@
+com/example/legacyshop/service/DiscountServiceTest.class
+com/example/legacyshop/service/ProductServiceTest.class
+com/example/legacyshop/service/LoyaltyServiceTest.class
+com/example/legacyshop/integration/OrderIntegrationTest.class
+com/example/legacyshop/service/OrderServiceTest.class
