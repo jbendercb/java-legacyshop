@@ -5,12 +5,23 @@ from ..models.product import Product
 from ..models.order import Order, OrderStatus
 from ..models.order_item import OrderItem
 from ..models.idempotency import IdempotencyRecord
+from ..models.customer import Customer
 from ..schemas.order import OrderCreate
 from ..utils.money import quantize_2
 from ..services.discount_service import calculate_discount
 from ..utils.idempotency import canonicalize_request, compute_request_hash
 from ..utils.problem_details import BusinessValidationError, DuplicateResourceError
 import json
+
+def _get_or_create_customer(db: Session, email: str) -> Customer:
+    cust = db.execute(select(Customer).where(Customer.email == email)).scalar_one_or_none()
+    if cust:
+        return cust
+    cust = Customer(email=email)
+    db.add(cust)
+    db.commit()
+    db.refresh(cust)
+    return cust
 
 def create_order(db: Session, body: OrderCreate, idem_key: str | None) -> tuple[dict, int]:
     canonical = canonicalize_request(body.model_dump())
@@ -21,6 +32,7 @@ def create_order(db: Session, body: OrderCreate, idem_key: str | None) -> tuple[
             if existing.request_hash == req_hash:
                 return json.loads(existing.response_body), existing.status_code
             raise DuplicateResourceError("Idempotency-Key reuse with different request body")
+    customer = _get_or_create_customer(db, body.customerEmail)
     subtotal = Decimal("0.00")
     items: list[OrderItem] = []
     for item in body.items:
@@ -40,7 +52,7 @@ def create_order(db: Session, body: OrderCreate, idem_key: str | None) -> tuple[
     total = quantize_2(subtotal - discount)
     if total <= Decimal("0.00"):
         raise BusinessValidationError("Total must be positive")
-    order = Order(status=OrderStatus.PENDING, subtotal=subtotal, discount=discount, total=total)
+    order = Order(status=OrderStatus.PENDING, subtotal=subtotal, discount=discount, total=total, customer_id=customer.id)
     order.items = items
     db.add(order)
     db.commit()
