@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, status, Response
 from sqlalchemy.orm import Session
 from ..db.session import get_db
 from ..schemas.order import OrderCreate, OrderOut
@@ -8,8 +8,10 @@ from ..services.payment_service import authorize_payment as svc_authorize
 router = APIRouter()
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
-def create_order(body: OrderCreate, db: Session = Depends(get_db), Idempotency_Key: str | None = Header(default=None, convert_underscores=False)):
-    resp, code = svc_create(db, body, Idempotency_Key)
+def create_order(body: OrderCreate, db: Session = Depends(get_db), idempotency_key: str | None = Header(default=None), response: Response = None):
+    resp, code = svc_create(db, body, idempotency_key)
+    if response is not None:
+        response.status_code = code
     return resp
 
 @router.get("/orders/{order_id}")
