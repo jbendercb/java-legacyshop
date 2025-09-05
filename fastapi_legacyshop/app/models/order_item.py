@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .order import Order
+    from .product import Product
 
 from ..db.base import Base
 
@@ -20,3 +21,4 @@ class OrderItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     order: Mapped["Order"] = relationship(back_populates="items")
+    product: Mapped["Product"] = relationship(lazy="joined")
