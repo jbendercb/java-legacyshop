@@ -1,0 +1,2601 @@
+# Technical Specification
+
+# System Architecture
+The LegacyShop application is a monolithic e-commerce backend built using Java 17 and Spring Boot 3. It implements enterprise patterns for product management, order processing, payment handling, inventory management, and reporting. The system is composed of several high-level components, each responsible for specific business functionalities. Integration points include REST APIs, database interactions, and external payment services. The data flow involves CRUD operations, business rule validations, and scheduled jobs for inventory replenishment and loyalty points processing.
+
+## Components
+
+### Product Management
+Handles CRUD operations for products.
+
+**Responsibilities:**
+- Create, update, delete, and retrieve product details
+- Validate SKU uniqueness
+- Manage stock quantities
+
+### Order Management
+Manages order creation, validation, and processing.
+
+**Responsibilities:**
+- Validate customer email and order items
+- Ensure atomic stock decrement during order creation
+- Handle order cancellation with stock restoration
+
+### Payment Processing
+Integrates with external payment services for authorization and retries.
+
+**Responsibilities:**
+- Authorize payments
+- Retry failed payments on transient errors
+- Void payments on order cancellation
+
+### Inventory Management
+Manages stock levels and replenishment.
+
+**Responsibilities:**
+- Validate stock availability during order creation
+- Restore stock on order cancellation
+- Run nightly replenishment jobs
+
+### Loyalty Points System
+Handles loyalty points accrual and caps.
+
+**Responsibilities:**
+- Accrue points for paid orders
+- Enforce maximum points cap per customer
+- Prevent duplicate points processing
+
+### Reporting
+Generates reports for orders and inventory.
+
+**Responsibilities:**
+- Provide paginated order reports
+- Support custom date range queries
+- Optimize data retrieval to prevent N+1 issues
+
+### Administrative Operations
+Provides endpoints for manual triggering of scheduled jobs.
+
+**Responsibilities:**
+- Trigger inventory replenishment
+- Trigger loyalty points processing
+- Replenish specific products
+
+## Architecture Diagram
+```mermaid
+graph TD
+    A[Product Management] --> B[Order Management]
+    B --> C[Payment Processing]
+    B --> D[Inventory Management]
+    C --> E[Loyalty Points System]
+    D --> F[Reporting]
+    F --> G[Administrative Operations]
+    %% Comments for relationships
+    %% Product Management interacts with Order Management for stock validation
+    %% Order Management integrates with Payment Processing for payment authorization
+    %% Inventory Management supports stock restoration and replenishment
+    %% Reporting provides insights into orders and inventory
+```
+
+# User Interface
+Identified and analyzed 18 user interface screens
+
+
+# Interface Specifications
+Overview of system interfaces
+
+## Function/method definitions
+Methods defined within classes to implement business logic, data processing, and system operations.
+
+### findOrdersForReport
+**Location:** ReportService class
+Fetches orders for a report within a date range and pageable constraints.
+
+#### Signature
+
+**Input Parameters:**
+- startDate (LocalDateTime): Start date for the report.
+- endDate (LocalDateTime): End date for the report.
+- pageable (Pageable): Pagination details for the report.
+
+**Output:** Page<Order>
+
+**Exceptions:**
+- DataAccessException
+
+### apply
+**Location:** ReportService class
+Applies a function and returns a Function object.
+
+#### Signature
+
+**Input Parameters:**
+
+**Output:** Function
+
+**Exceptions:**
+
+## Service interfaces
+Interfaces that define business logic and interact with repositories or external systems.
+
+### ProductService
+**Location:** ProductService class
+Handles product-related operations such as creation, retrieval, and validation.
+
+#### Signature
+
+**Input Parameters:**
+- product (Product): Product entity to be processed.
+
+**Output:** Product
+
+**Exceptions:**
+- ValidationException
+- DataAccessException
+
+### OrderService
+**Location:** OrderService class
+Manages order placement, validation, and stock adjustments.
+
+#### Signature
+
+**Input Parameters:**
+- order (Order): Order entity to be processed.
+
+**Output:** Order
+
+**Exceptions:**
+- BusinessRuleViolationException
+- DataAccessException
+
+## Data access patterns
+Patterns used to interact with the database, typically through repositories.
+
+### OrderRepository
+**Location:** OrderRepository interface
+Provides data access methods for orders.
+
+#### Signature
+
+**Input Parameters:**
+- dateRange (LocalDateTime[]): Date range for filtering orders.
+
+**Output:** List<Order>
+
+**Exceptions:**
+- DataAccessException
+
+## External system interactions
+Interactions with external systems such as payment gateways.
+
+### authorizePayment
+**Location:** PaymentService class
+Handles payment authorization with retry logic.
+
+#### Signature
+
+**Input Parameters:**
+- paymentDetails (Payment): Details of the payment to be authorized.
+
+**Output:** PaymentResponse
+
+**Exceptions:**
+- PaymentException
+- TimeoutException
+
+## Message passing mechanisms
+Mechanisms for passing data between components or systems.
+
+### triggerReplenishment
+**Location:** AdminController class
+Triggers inventory replenishment manually.
+
+#### Signature
+
+**Input Parameters:**
+
+**Output:** ResponseEntity
+
+**Exceptions:**
+- ServiceUnavailableException
+
+## Event handling
+Scheduled tasks and event-driven operations.
+
+### processLoyaltyPoints
+**Location:** LoyaltyService class
+Scheduled task to process loyalty points for paid orders.
+
+#### Signature
+
+**Input Parameters:**
+
+**Output:** void
+
+**Exceptions:**
+- DataAccessException
+
+# Integration Points
+The application integrates with external systems for payment processing, inventory management, and loyalty points accrual. It uses REST APIs for communication and JSON as the primary data exchange format. The integration points include external payment authorization services, scheduled inventory replenishment jobs, and loyalty points processing triggered by paid orders.
+
+## External Systems
+
+### Payment Authorization Service
+Handles payment authorization and retries on transient failures.
+
+**Integration Type:** REST API
+**Data Format:** JSON
+
+### Inventory Management System
+Manages stock replenishment and validation during order placement.
+
+**Integration Type:** Scheduled Jobs and REST API
+**Data Format:** JSON
+
+### Loyalty Points System
+Processes loyalty points accrual for paid orders and enforces business caps.
+
+**Integration Type:** Scheduled Jobs and REST API
+**Data Format:** JSON
+
+## Integration Diagram
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant App as LegacyShop Application
+    participant PaymentService as Payment Authorization Service
+    participant InventoryService as Inventory Management System
+    participant LoyaltyService as Loyalty Points System
+
+    %% User places an order
+    User->>App: POST /api/orders
+    App->>InventoryService: Validate stock
+    InventoryService-->>App: Stock validation result
+
+    %% Payment authorization
+    App->>PaymentService: POST /mock/payment/authorize
+    PaymentService-->>App: Payment authorization result
+
+    %% Loyalty points processing
+    App->>LoyaltyService: Trigger loyalty points accrual
+    LoyaltyService-->>App: Loyalty points processing result
+
+    %% Inventory replenishment
+    App->>InventoryService: Trigger scheduled replenishment
+    InventoryService-->>App: Replenishment confirmation
+```
+
+# Security Considerations
+Overview of security considerations implemented in the LegacyShop application.
+
+## Authentication
+- The application uses a mock payment service for testing purposes, which simulates authentication flows via the `MockPaymentController` class. The `authorize` method handles payment authorization requests and validates the `amount` field to ensure it meets minimum requirements.
+- Authentication configurations for external payment services are defined in the `BusinessConfig` class under the `Payments` nested class, which includes the `authUrl` property for the payment authorization endpoint and a `timeoutSeconds` property for session management.
+- Session management is indirectly implemented through the `timeoutSeconds` configuration in `application.yaml`, ensuring external service calls are time-bound.
+
+## Authorization
+- The application implements role-based access control (RBAC) for administrative operations via the `AdminController` endpoints, such as `/api/admin/trigger-replenishment` and `/api/admin/replenish-product/{id}`. These endpoints are designed for manual triggering of scheduled jobs and product replenishment.
+- Authorization rules for accessing specific resources are enforced through validation checks in the `MockPaymentController` and `GlobalExceptionHandler`. For example, the `voidPayment` method validates the presence of `authorizationId` before processing void requests.
+- Permission checks are indirectly implemented through exception handling in the `GlobalExceptionHandler`, which maps unauthorized or invalid actions to appropriate HTTP status codes (e.g., 400 Bad Request, 409 Conflict).
+
+## Data_Protection
+- Data sanitization is implemented in the `MockPaymentController` class, where the `authorize` method validates the `amount` field to prevent invalid or malicious input (e.g., negative values).
+- The `GlobalExceptionHandler` class ensures data privacy by mapping validation errors and exceptions to standardized RFC-7807 Problem Details responses, avoiding exposure of sensitive information in error messages.
+- Encryption methods for data in transit are not explicitly implemented in the codebase, but the use of `WebClient` in the `PaymentService` class suggests potential support for HTTPS-based secure communication with external services.
+
+# User Stories with Technical Requirements
+
+## Create a New Product
+
+The feature allows users to create a new product in the system by providing essential details such as SKU, name, description, price, and stock quantity. It ensures that the SKU is unique to prevent duplication, thereby maintaining data integrity and avoiding conflicts in inventory management. This functionality is crucial for expanding the product catalog and supporting business growth.
+
+### Technical Requirements
+
+
+## Retrieve Product by ID
+
+The feature allows users to retrieve detailed information about a specific product using its unique ID. This functionality is essential for scenarios where users need to view product details for inventory management, order processing, or customer inquiries. By providing comprehensive product information, the feature enhances transparency and supports informed decision-making for both administrative and operational tasks.
+
+### Technical Requirements
+
+
+## Update Product Details
+
+The 'Update Product Details' feature allows users to modify existing product information in the system. This includes updating fields such as name, description, price, stock quantity, and active status. The feature ensures that only valid and non-null fields are updated, while maintaining the integrity of the SKU. It provides transactional support to ensure atomicity and creates audit logs for tracking changes. This functionality is essential for keeping product information accurate and up-to-date, benefiting both the business and its customers by ensuring reliable data and streamlined operations.
+
+### Technical Requirements
+
+
+## Delete a Product
+
+The feature allows users to soft delete a product by setting its active status to false. This ensures that the product is no longer visible in active product listings but remains in the database for auditing and potential recovery. It is essential for maintaining data integrity and providing a way to track product lifecycle changes. This feature benefits users by enabling them to manage product visibility without permanently losing data, ensuring compliance with business rules and audit requirements.
+
+### Technical Requirements
+
+
+## Search Products by Name
+
+The 'Search Products by Name' feature allows users to find products in the system by entering a product name or partial name. This feature is essential for improving user experience by enabling quick and efficient product discovery. Users can specify pagination and sorting options to customize the search results, ensuring they can navigate large product catalogs with ease. The feature ensures that only active products are displayed, maintaining the integrity of the search results. By supporting partial and case-insensitive matches, the feature accommodates a wide range of user inputs, making it highly user-friendly and accessible.
+
+### Technical Requirements
+
+The 'Search Products by Name' feature must be implemented as a RESTful API endpoint within the ProductController class. This endpoint should support GET requests to the '/api/products/search' path and accept query parameters for the product name, pagination, and sorting options. The ProductService class will handle the business logic for searching products, ensuring that only active products are included in the results. The search functionality must be case-insensitive and support partial matches to accommodate diverse user inputs.
+
+The ProductRepository interface will provide a method named 'findByNameContainingIgnoreCase' that accepts the product name and a Pageable object as parameters. This method will query the database for active products whose names contain the specified text, ignoring case sensitivity. The database schema does not require changes as the existing 'name' column in the Product table already supports text-based queries.
+
+Validation must be implemented to ensure that the 'name' query parameter is not null or empty. If the parameter is invalid, the system should return a 400 Bad Request response with appropriate error details. The Pageable object will handle pagination and sorting, and the API response should include the total number of matching products to support pagination.
+
+Integration with the ProductService class will ensure that the search results are returned as a Page object containing ProductResponse DTOs. These DTOs will map the relevant fields from the Product entity, such as name, description, price, and stock quantity, while excluding inactive products. The API must return a 200 OK response with the paginated list of products or a 204 No Content response if no matches are found.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class ProductController {
+        +ResponseEntity<Page<ProductResponse>> searchProducts(String name, Pageable pageable)
+    }
+
+    class ProductService {
+        +Page<ProductResponse> searchProducts(String name, Pageable pageable)
+    }
+
+    class ProductRepository {
+        +Page<Product> findByNameContainingIgnoreCase(String name, Pageable pageable)
+    }
+
+    ProductController --> ProductService
+    ProductService --> ProductRepository
+    ProductRepository --> Product
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant ProductController
+    participant ProductService
+    participant ProductRepository
+    participant Database
+
+    User->>ProductController: GET /api/products/search?name=laptop&page=0&size=5
+    ProductController->>ProductService: searchProducts(name, pageable)
+    ProductService->>ProductRepository: findByNameContainingIgnoreCase(name, pageable)
+    ProductRepository->>Database: Query active products with name containing 'laptop'
+    Database-->>ProductRepository: Return matching products
+    ProductRepository-->>ProductService: Return Page<Product>
+    ProductService-->>ProductController: Return Page<ProductResponse>
+    ProductController-->>User: 200 OK with paginated results
+```
+
+
+## Place an Order with Atomic Stock Decrement
+
+The feature enables users to place orders while ensuring that stock quantities are decremented atomically to maintain transactional integrity. It validates customer details, checks product availability, calculates order totals with discounts, and prevents duplicate orders using idempotency keys. This functionality is essential for maintaining accurate inventory levels, ensuring business rule compliance, and providing a seamless ordering experience for users. By enforcing atomic operations, the feature minimizes risks of data inconsistencies and supports robust error handling, enhancing reliability and user trust.
+
+### Technical Requirements
+
+
+## Prevent Duplicate Orders Using Idempotency
+
+This feature ensures that duplicate orders are prevented by using idempotency keys. An idempotency key is a unique identifier provided by the client for each order creation request. If the same key is used in multiple requests, the system will return the existing order associated with that key instead of creating a new one. This feature is crucial for avoiding duplicate charges or orders in scenarios where network issues or client retries occur. By implementing idempotency, the system enhances reliability, user trust, and operational efficiency.
+
+### Technical Requirements
+
+To implement the feature of preventing duplicate orders using idempotency keys, the following technical requirements must be addressed:
+
+- Architecture Considerations:
+  - Ensure the system supports idempotency by introducing a mechanism to store and retrieve idempotency keys securely.
+  - Implement transactional integrity to avoid partial updates during order creation.
+  - Design the system to handle expired idempotency keys gracefully.
+
+- Involved Modules/Classes:
+  - `OrderService`: Responsible for handling order creation logic and idempotency checks.
+  - `IdempotencyRecordRepository`: Manages the storage and retrieval of idempotency keys and their associated order details.
+  - `OrderEntity`: Represents the order and includes fields for idempotency key association.
+  - `AuditLogRepository`: Logs actions related to idempotency and order creation for traceability.
+
+- Relevant Interfaces or Methods:
+  - `OrderService.createOrder(OrderCreateRequest request, String idempotencyKey)`: Validates the idempotency key and either creates a new order or retrieves an existing one.
+  - `IdempotencyRecordRepository.findByIdempotencyKey(String idempotencyKey)`: Fetches the record associated with the given idempotency key.
+  - `IdempotencyRecordRepository.save(IdempotencyRecord record)`: Stores the idempotency key and associated order details.
+
+- Database Schema Changes:
+  - Add a new table `IdempotencyRecord` with the following fields:
+    - `idempotencyKey` (String, unique, not null): Stores the unique identifier for idempotency.
+    - `resultEntityId` (Long, nullable): References the associated order ID.
+    - `createdAt` (DateTime, not null): Timestamp for record creation.
+  - Update `OrderEntity` to include a foreign key reference to `IdempotencyRecord`.
+
+- Validations:
+  - Validate the presence and format of the idempotency key.
+  - Ensure the idempotency key is unique and not expired.
+  - Reject requests with invalid or missing idempotency keys when required.
+
+- Integration Points:
+  - Integrate with the `OrderController` to expose endpoints for order creation with idempotency support.
+  - Ensure compatibility with payment services to avoid duplicate charges.
+  - Log all actions related to idempotency in the audit log for monitoring and debugging purposes.
+
+#### UML Diagram
+```mermaid
+classDiagram
+class OrderService {
+  +createOrder(OrderCreateRequest request, String idempotencyKey): OrderResponse
+}
+class IdempotencyRecordRepository {
+  +findByIdempotencyKey(String idempotencyKey): IdempotencyRecord
+  +save(IdempotencyRecord record): void
+}
+class OrderEntity {
+  +idempotencyKey: String
+  +resultEntityId: Long
+}
+class IdempotencyRecord {
+  +idempotencyKey: String
+  +resultEntityId: Long
+  +createdAt: DateTime
+}
+class AuditLogRepository {
+  +save(AuditLog log): void
+}
+OrderService --> IdempotencyRecordRepository
+OrderService --> OrderEntity
+OrderEntity --> IdempotencyRecord
+OrderService --> AuditLogRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+actor Client
+participant OrderController
+participant OrderService
+participant IdempotencyRecordRepository
+participant OrderRepository
+participant AuditLogRepository
+Client -> OrderController: POST /createOrder
+OrderController -> OrderService: createOrder(request, idempotencyKey)
+OrderService -> IdempotencyRecordRepository: findByIdempotencyKey(idempotencyKey)
+IdempotencyRecordRepository -->> OrderService: IdempotencyRecord
+alt Idempotency key exists
+  OrderService -> OrderRepository: findById(resultEntityId)
+  OrderRepository -->> OrderService: OrderEntity
+  OrderService -> OrderController: Return existing order
+else Idempotency key does not exist
+  OrderService -> OrderRepository: save(new OrderEntity)
+  OrderRepository -->> OrderService: Saved OrderEntity
+  OrderService -> IdempotencyRecordRepository: save(new IdempotencyRecord)
+  OrderService -> AuditLogRepository: save(new AuditLog)
+  OrderService -> OrderController: Return new order
+end
+```
+
+
+## Cancel an Order with Compensating Actions
+
+The feature allows users to cancel an order and ensures compensating actions are performed to maintain system integrity. When an order is canceled, the stock for the associated products is restored, any authorized payments are voided, and the order status is updated to reflect the cancellation. This feature is essential for handling scenarios where customers change their minds or errors occur during order processing. It benefits users by providing flexibility and ensuring accurate inventory and payment records.
+
+### Technical Requirements
+
+
+## Authorize Payment for Orders
+
+The 'Authorize Payment for Orders' feature enables the system to handle payment authorization for customer orders. This feature integrates with an external payment service to process payments securely and reliably. It includes retry logic for handling temporary service unavailability (5xx errors) and maps client-side errors (4xx errors) to domain-specific exceptions. Upon successful authorization, the system updates the payment and order statuses, ensuring transactional consistency. This feature is essential for ensuring a seamless checkout experience for customers and maintaining accurate financial records for the business.
+
+### Technical Requirements
+
+The 'Authorize Payment for Orders' feature must ensure secure and reliable payment processing by integrating with an external payment service. The implementation should adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - Utilize Spring Boot's transactional management to ensure atomicity and consistency during payment authorization.
+  - Implement retry logic using the @Retryable annotation for handling temporary service unavailability (5xx errors).
+  - Map client-side errors (4xx errors) to domain-specific exceptions using custom exception handling.
+  - Ensure proper logging mechanisms for invalid responses and failed authorizations.
+
+- Involved Modules/Classes:
+  - PaymentService: Responsible for orchestrating payment authorization, retry logic, and error handling.
+  - PaymentRepository: Used for persisting payment records and updating retry attempts and failure reasons.
+  - OrderRepository: Used for updating order statuses upon successful payment authorization.
+  - BusinessConfig: Provides configuration for payment service URLs and timeout settings.
+
+- Relevant Interfaces or Methods:
+  - authorizePayment(Long orderId): Handles the payment authorization process, including external service calls and status updates.
+  - callExternalPaymentService(BigDecimal amount): Invokes the external payment service and validates the response.
+  - incrementRetryAttempts(): Updates the retry attempts for a payment record.
+  - fail(String errorMessage): Records the failure reason in the payment record.
+
+- Database Schema Changes:
+  - Ensure the 'payments' table includes fields for 'retryAttempts' and 'errorMessage' to track retry attempts and failure reasons.
+
+- Validations:
+  - Validate the payment amount to ensure it meets minimum requirements before invoking the external service.
+  - Ensure the external service response contains a valid authorization ID; otherwise, log the error and fail the authorization.
+
+- Integration Points:
+  - External Payment Service: Use WebClient for making HTTP POST requests to the payment authorization endpoint.
+  - Logging Framework: Integrate with the application's logging framework to record errors and invalid responses.
+
+This feature must ensure transactional consistency by updating the payment status to 'AUTHORIZED' and associating the authorization ID with the payment record upon successful authorization. Additionally, the order status must be updated to 'PAID' to reflect the successful payment.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class PaymentService {
+        +authorizePayment(Long orderId)
+        -callExternalPaymentService(BigDecimal amount)
+        -incrementRetryAttempts()
+        -fail(String errorMessage)
+    }
+    class PaymentRepository {
+        +save(Payment payment)
+        +findByOrderId(Long orderId)
+    }
+    class OrderRepository {
+        +save(OrderEntity order)
+        +findById(Long orderId)
+    }
+    class BusinessConfig {
+        +getPaymentsAuthUrl()
+        +getTimeoutSeconds()
+    }
+    PaymentService --> PaymentRepository
+    PaymentService --> OrderRepository
+    PaymentService --> BusinessConfig
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor Customer
+    participant OrderService
+    participant PaymentService
+    participant ExternalPaymentService
+    participant PaymentRepository
+    participant OrderRepository
+    Customer->>OrderService: Request to authorize payment
+    OrderService->>PaymentService: Invoke authorizePayment(orderId)
+    PaymentService->>PaymentRepository: Retrieve payment record
+    PaymentService->>ExternalPaymentService: Send payment authorization request
+    ExternalPaymentService-->>PaymentService: Return authorization ID
+    PaymentService->>PaymentRepository: Update payment status to AUTHORIZED
+    PaymentService->>OrderRepository: Update order status to PAID
+    PaymentService-->>OrderService: Return success response
+    OrderService-->>Customer: Confirm payment authorization
+```
+
+
+## Void Payment on Order Cancellation
+
+The Void Payment on Order Cancellation feature ensures that when an order is cancelled, any associated payment is voided to prevent unnecessary charges. This feature interacts with an external payment service to void the payment and updates the payment status to VOIDED. Additionally, it updates the order status to CANCELLED, restores the stock associated with the order, and logs the operation for auditing purposes. This feature is essential for maintaining transactional integrity and ensuring customer satisfaction by preventing charges for cancelled orders.
+
+### Technical Requirements
+
+
+## Retry Payment Authorization on Failure
+
+The feature enables the system to handle payment authorization requests with robust error handling and retry logic. When a payment authorization request is sent to an external service, the system will retry the request up to two times if the service returns a 5xx error, ensuring resilience against temporary server issues. For 4xx errors, the system will map the error to a domain-specific exception and mark the payment as failed without retrying. This feature ensures that payments are either successfully authorized or appropriately marked as failed, providing clear feedback to users and maintaining transactional consistency. By implementing this feature, users benefit from improved reliability in payment processing and better error handling, reducing the likelihood of failed transactions due to temporary issues.
+
+### Technical Requirements
+
+
+## Handle Payment Authorization Errors Gracefully
+
+This feature ensures that payment authorization errors are handled effectively to improve user experience and system reliability. It maps client-side errors (4xx) to domain-specific exceptions, allowing for better error reporting and handling. Server-side errors (5xx) trigger retry logic to ensure payment authorization succeeds in case of temporary issues. This functionality is crucial for maintaining transactional integrity and providing clear feedback to users.
+
+### Technical Requirements
+
+
+## Track Payment Retry Attempts
+
+The feature allows tracking the number of retry attempts made for payment authorization. This is essential for managing payment workflows where external services may fail temporarily. By tracking retry attempts, the system can enforce a cap on retries, ensuring that resources are not wasted on repeated failed attempts. This feature benefits users by providing transparency into payment processing and enabling better error handling and recovery strategies.
+
+### Technical Requirements
+
+
+## Validate Payment Status Before Voiding
+
+The feature ensures that payments can only be voided if their status is 'AUTHORIZED'. This validation prevents unauthorized or invalid voiding operations, maintaining the integrity of the payment process. By enforcing this rule, the system avoids potential errors or inconsistencies in payment records. This feature benefits users by providing clear feedback on voiding attempts and ensuring that only valid operations are executed, thereby enhancing the reliability and trustworthiness of the payment system.
+
+### Technical Requirements
+
+
+## Accrue Loyalty Points for Paid Orders
+
+The feature allows the system to automatically process paid orders and accrue loyalty points for customers. This ensures that customers are rewarded for their purchases, enhancing customer satisfaction and encouraging repeat business. The system enforces idempotency to prevent duplicate processing of the same order and applies a cap on the maximum loyalty points a customer can earn. Additionally, the feature includes detailed logging for transparency and traceability, and it calculates points based on configurable business rules, such as points-per-dollar rates. This functionality is essential for maintaining a fair and efficient loyalty program that benefits both the business and its customers.
+
+### Technical Requirements
+
+
+## Enforce Loyalty Points Cap
+
+The Enforce Loyalty Points Cap feature ensures that customers' loyalty points do not exceed a predefined maximum limit. This feature calculates loyalty points based on the order total and a configurable points-per-dollar rate. It enforces idempotency to prevent duplicate processing of the same order and ensures that only PAID orders are eligible for loyalty points. Additionally, it creates audit logs for transparency and accountability. This feature is essential for maintaining fairness in the loyalty program and preventing abuse, thereby enhancing customer trust and satisfaction.
+
+### Technical Requirements
+
+The Enforce Loyalty Points Cap feature must adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The feature must integrate seamlessly with the existing LoyaltyService class, leveraging its methods for processing orders and calculating loyalty points.
+  - Ensure the feature adheres to the idempotency pattern to prevent duplicate processing of orders.
+  - Utilize the BusinessConfig class to fetch configuration values such as points-per-dollar rate and maximum loyalty points cap.
+
+- Involved Modules/Classes:
+  - LoyaltyService: Responsible for processing orders and enforcing the loyalty points cap.
+  - BusinessConfig: Provides configuration values for loyalty points calculation.
+  - IdempotencyRecordRepository: Ensures idempotency by tracking processed orders.
+  - AuditLogRepository: Logs details of loyalty points transactions for transparency.
+  - CustomerRepository: Updates customer loyalty points in the database.
+
+- Relevant Interfaces or Methods:
+  - LoyaltyService.processOrderForLoyaltyPoints(OrderEntity order): Must be enhanced to enforce the loyalty points cap and create audit logs.
+  - BusinessConfig.getLoyalty().getPointsPerDollar(): Fetches the points-per-dollar rate.
+  - BusinessConfig.getLoyalty().getMaxPoints(): Fetches the maximum loyalty points cap.
+  - IdempotencyRecordRepository.existsByIdempotencyKey(String key): Checks if an order has already been processed.
+  - AuditLogRepository.save(AuditLog log): Saves audit logs for processed orders.
+  - CustomerRepository.save(Customer customer): Updates customer loyalty points.
+
+- Database Schema Changes:
+  - No changes are required to the database schema as the existing tables (customers, idempotency_records, audit_logs) already support the required functionality.
+
+- Validations:
+  - Validate that the order status is PAID before processing.
+  - Ensure the order total is greater than zero to calculate loyalty points.
+  - Check if the customer’s current loyalty points are below the maximum cap before adding new points.
+  - Verify idempotency by checking if the order has already been processed.
+
+- Integration Points:
+  - The feature must integrate with the scheduled loyalty points processing job to ensure periodic enforcement of the cap.
+  - Provide an API endpoint for manual triggering of loyalty points processing, ensuring the cap is enforced during manual operations.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class LoyaltyService {
+        +processOrderForLoyaltyPoints(OrderEntity order)
+        +calculateLoyaltyPoints(BigDecimal orderTotal)
+    }
+    class BusinessConfig {
+        +getLoyalty(): Loyalty
+    }
+    class Loyalty {
+        +getPointsPerDollar(): double
+        +getMaxPoints(): int
+    }
+    class IdempotencyRecordRepository {
+        +existsByIdempotencyKey(String key): boolean
+    }
+    class AuditLogRepository {
+        +save(AuditLog log)
+    }
+    class CustomerRepository {
+        +save(Customer customer)
+    }
+    LoyaltyService --> BusinessConfig
+    LoyaltyService --> IdempotencyRecordRepository
+    LoyaltyService --> AuditLogRepository
+    LoyaltyService --> CustomerRepository
+    BusinessConfig --> Loyalty
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant API
+    participant LoyaltyService
+    participant BusinessConfig
+    participant IdempotencyRecordRepository
+    participant AuditLogRepository
+    participant CustomerRepository
+
+    User->>API: Trigger loyalty points processing
+    API->>LoyaltyService: processOrderForLoyaltyPoints(order)
+    LoyaltyService->>IdempotencyRecordRepository: Check idempotency
+    IdempotencyRecordRepository-->>LoyaltyService: Exists/Not Exists
+    LoyaltyService->>BusinessConfig: Fetch points-per-dollar rate
+    LoyaltyService->>BusinessConfig: Fetch max points cap
+    LoyaltyService->>CustomerRepository: Update loyalty points
+    LoyaltyService->>AuditLogRepository: Create audit log
+    LoyaltyService-->>API: Return processing result
+```
+
+
+## Prevent Duplicate Loyalty Points Processing
+
+The 'Prevent Duplicate Loyalty Points Processing' feature ensures that each order is processed for loyalty points only once. This is achieved by using unique idempotency keys for each order. The feature prevents duplicate processing, ensuring accurate loyalty points calculation and adherence to business rules. By implementing this feature, the system maintains data integrity, avoids redundant operations, and enhances user trust by ensuring that loyalty points are awarded correctly and only once per eligible order.
+
+### Technical Requirements
+
+
+## Manual Trigger for Loyalty Points Processing
+
+The manual trigger for loyalty points processing feature allows administrators to initiate the processing of loyalty points for eligible orders via a REST API endpoint. This feature is essential for testing and operational purposes, enabling administrators to verify the functionality of loyalty points accrual outside of scheduled tasks. By providing immediate feedback on the number of orders processed and any errors encountered, this feature ensures transparency and control over the loyalty points system. It benefits users by maintaining the integrity of loyalty points accrual and ensuring timely updates to customer accounts.
+
+### Technical Requirements
+
+The manual trigger for loyalty points processing feature should be implemented as a REST API endpoint in the AdminController class. The endpoint '/api/admin/trigger-loyalty-processing' should handle POST requests and invoke the LoyaltyService's method for processing loyalty points. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - Ensure the endpoint is part of the AdminController class, which is designed for administrative operations.
+  - Use Spring Boot's @PostMapping annotation to define the endpoint.
+  - Implement exception handling to manage errors during processing and provide meaningful feedback to the client.
+  - Log the completion of loyalty points processing using a logging framework like SLF4J.
+
+- Involved Modules/Classes:
+  - AdminController: Define the endpoint and handle incoming requests.
+  - LoyaltyService: Implement the business logic for processing loyalty points.
+  - IdempotencyRecordRepository: Ensure idempotency by checking and recording processed orders.
+  - AuditLogRepository: Log the details of the operation for auditing purposes.
+
+- Relevant Interfaces or Methods:
+  - AdminController.triggerLoyaltyProcessing(): Handle the POST request and invoke LoyaltyService.
+  - LoyaltyService.triggerManualLoyaltyProcessing(): Process all eligible orders and return the number of orders processed.
+  - IdempotencyRecordRepository.existsByIdempotencyKey(): Check if an order has already been processed.
+  - AuditLogRepository.save(): Log the operation details.
+
+- Database Schema Changes:
+  - No changes to the database schema are required for this feature.
+
+- Validations:
+  - Validate that the request is a POST request.
+  - Ensure that only orders with a PAID status are processed.
+  - Return a JSON response with the status, message, and number of orders processed.
+  - Handle cases where no eligible orders are found and return a response indicating zero orders processed.
+  - Provide a descriptive error message in the JSON response if an exception occurs.
+
+- Integration Points:
+  - Integrate with the LoyaltyService to process loyalty points.
+  - Use IdempotencyRecordRepository to ensure idempotency.
+  - Log the operation using AuditLogRepository.
+  - Return responses using Spring Boot's ResponseEntity class.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerLoyaltyProcessing(): ResponseEntity
+    }
+    class LoyaltyService {
+        +triggerManualLoyaltyProcessing(): int
+    }
+    class IdempotencyRecordRepository {
+        +existsByIdempotencyKey(String): boolean
+    }
+    class AuditLogRepository {
+        +save(AuditLog): void
+    }
+    AdminController --> LoyaltyService
+    LoyaltyService --> IdempotencyRecordRepository
+    LoyaltyService --> AuditLogRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant AdminController
+    participant LoyaltyService
+    participant IdempotencyRecordRepository
+    participant AuditLogRepository
+    Admin -> AdminController: POST /api/admin/trigger-loyalty-processing
+    AdminController -> LoyaltyService: triggerManualLoyaltyProcessing()
+    LoyaltyService -> IdempotencyRecordRepository: Check idempotency
+    IdempotencyRecordRepository --> LoyaltyService: Idempotency status
+    LoyaltyService -> AuditLogRepository: Log operation
+    LoyaltyService --> AdminController: Number of orders processed
+    AdminController --> Admin: JSON response with status, message, and orders processed
+```
+
+
+## View Loyalty Points Balance
+
+The View Loyalty Points Balance feature allows customers to check their current loyalty points balance by providing their email address. This feature is essential for customers to track their rewards and understand their eligibility for benefits or discounts. By enabling customers to view their loyalty points, the system enhances transparency and customer satisfaction, ensuring they are informed about their rewards status. This functionality is particularly beneficial for customers who frequently shop and rely on loyalty points for additional savings or perks.
+
+### Technical Requirements
+
+
+## Apply Tiered Discounts Based on Subtotal
+
+The feature enables the application of tiered discounts to orders based on their subtotal. This ensures that customers receive appropriate discounts according to predefined thresholds, enhancing the shopping experience and encouraging higher spending. The system calculates discounts dynamically using configuration-driven rules, ensuring flexibility and accuracy.
+
+### Technical Requirements
+
+
+## Configure Discount Tiers via External Settings
+
+This feature allows administrators to configure discount tiers for orders through the application.yaml file. Each tier specifies a minimum order subtotal (threshold) and a corresponding discount percentage. The system applies the highest applicable discount tier to an order subtotal. This configuration-driven approach eliminates the need for code changes when updating discount rules, ensuring flexibility and ease of maintenance. By enabling tiered discounts, the feature incentivizes higher order values and enhances the shopping experience for customers.
+
+### Technical Requirements
+
+
+## Validate Discount Application for Edge Cases
+
+This feature ensures that discounts are correctly applied to order subtotals, especially in edge cases such as when the subtotal is exactly at a threshold, null, or below the minimum threshold. By validating these scenarios, the system guarantees accurate discount calculations, enhancing user trust and satisfaction. This feature is crucial for maintaining consistency in pricing and ensuring that customers receive the correct benefits based on their purchase amounts.
+
+### Technical Requirements
+
+
+## Support Discount Calculation for Null Subtotals
+
+The feature ensures that the discount calculation logic in the system can handle cases where the subtotal is null. This is necessary to prevent errors and ensure consistent behavior in scenarios where the subtotal might not be provided or is invalid. By returning a discount of zero for null subtotals, the system avoids potential crashes and provides a predictable outcome for edge cases. This benefits users by maintaining system reliability and ensuring accurate discount calculations even in unusual circumstances.
+
+### Technical Requirements
+
+
+## Ensure Discounts Are Applied Atomically
+
+This feature ensures that discounts are applied atomically during the order creation process. The system calculates the discount based on the order subtotal and applies it to the total amount in a single, indivisible operation. This prevents partial updates or inconsistencies in the event of a failure during the discount application process. By enforcing atomicity, the feature guarantees that either the entire discount is applied successfully, or no changes are made to the order. This is crucial for maintaining data integrity and providing a seamless user experience. Additionally, the feature includes validation of discount configurations and ensures that discounts are stored with the order for future reference and auditing.
+
+### Technical Requirements
+
+
+## Display Discount Rate to Customers
+
+The feature allows customers to view the discount rate applicable to their order subtotal before completing a purchase. This functionality ensures transparency in pricing and helps customers understand the benefits of reaching higher discount tiers. By displaying the discount rate, customers can make informed decisions about their purchases, potentially increasing their satisfaction and encouraging higher spending to achieve better discounts.
+
+### Technical Requirements
+
+
+## Test Discount Application for Various Tiers
+
+This user story focuses on verifying the correct application of tiered discounts in the DiscountService. The feature ensures that customers receive appropriate discounts based on their order subtotal, adhering to predefined thresholds for each discount tier. By implementing this functionality, the system provides transparency and fairness in discount calculations, enhancing customer satisfaction and trust. The feature also handles edge cases, such as null subtotals, ensuring robust and error-free operations. This functionality is crucial for maintaining consistency in promotional offers and aligning with business rules.
+
+### Technical Requirements
+
+The DiscountService must implement tiered discount calculations based on predefined thresholds. The architecture should ensure that the discount calculation logic is encapsulated within the DiscountService class, adhering to the principles of modular design and separation of concerns. The BusinessConfig class should provide configuration-driven thresholds and discount rates for each tier, ensuring flexibility and maintainability. The DiscountService should expose methods for calculating the discount amount and retrieving the discount rate, both of which must handle edge cases such as null subtotals gracefully. 
+
+The involved modules include the DiscountService class for business logic, the BusinessConfig class for configuration management, and the DiscountServiceTest class for unit testing. The DiscountService class should utilize the Promotions and DiscountTier nested classes within BusinessConfig to fetch tier-specific thresholds and discount rates. The calculateDiscount method must iterate through the tiers in descending order of thresholds to ensure the highest applicable discount is applied. The getDiscountRate method should return the discount rate corresponding to the subtotal's tier.
+
+Validation requirements include ensuring that the subtotal is a non-negative BigDecimal and that null values are handled by returning a discount of zero. Integration points include the BusinessConfig class for fetching tier configurations and the DiscountServiceTest class for verifying the correctness of discount calculations through unit tests.
+
+No database schema changes are required as the discount tiers are configuration-driven and do not rely on persistent storage. The implementation must ensure that the discount calculation logic is immutable and thread-safe, supporting concurrent requests without side effects.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class DiscountService {
+        - BusinessConfig businessConfig
+        + calculateDiscount(subtotal: BigDecimal): BigDecimal
+        + getDiscountRate(subtotal: BigDecimal): BigDecimal
+    }
+    class BusinessConfig {
+        + getPromotions(): Promotions
+    }
+    class Promotions {
+        + getTier1(): DiscountTier
+        + getTier2(): DiscountTier
+        + getTier3(): DiscountTier
+    }
+    class DiscountTier {
+        + getThreshold(): BigDecimal
+        + getDiscount(): BigDecimal
+    }
+    DiscountService --> BusinessConfig
+    BusinessConfig --> Promotions
+    Promotions --> DiscountTier
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant DiscountService
+    participant BusinessConfig
+    participant Promotions
+    participant DiscountTier
+    User -> DiscountService: calculateDiscount(subtotal)
+    DiscountService -> BusinessConfig: getPromotions()
+    BusinessConfig -> Promotions: getTier1(), getTier2(), getTier3()
+    DiscountService -> DiscountTier: getThreshold(), getDiscount()
+    DiscountService -> User: Return calculated discount
+    User -> DiscountService: getDiscountRate(subtotal)
+    DiscountService -> BusinessConfig: getPromotions()
+    BusinessConfig -> Promotions: getTier1(), getTier2(), getTier3()
+    DiscountService -> DiscountTier: getThreshold(), getDiscount()
+    DiscountService -> User: Return discount rate
+```
+
+
+## Handle Discounts for Orders Below Threshold
+
+This feature ensures that no discounts are applied to orders with subtotals below the minimum threshold defined in the business rules. It is essential to maintain the integrity of the discount system by ensuring that only eligible orders receive discounts. This prevents unintended financial losses and ensures fairness in the application of discounts. By implementing this feature, users can trust that the discount system operates transparently and consistently, providing accurate calculations for all orders.
+
+### Technical Requirements
+
+The feature to handle discounts for orders below the threshold must ensure that the discount calculation logic adheres to the business rules defined in the configuration. The following technical requirements must be implemented:
+
+- Architecture Considerations:
+  - The discount calculation logic should be encapsulated within the DiscountService class to maintain separation of concerns and ensure reusability.
+  - The feature must integrate seamlessly with the existing tiered discount structure defined in the BusinessConfig class.
+
+- Involved Modules/Classes:
+  - DiscountService: Responsible for calculating discounts and retrieving discount rates.
+  - BusinessConfig: Provides the configuration for discount tiers, including thresholds and discount percentages.
+  - DiscountServiceTest: Contains unit tests to validate the correctness of the discount calculation logic.
+
+- Relevant Interfaces or Methods:
+  - calculateDiscount(BigDecimal subtotal): This method should return a discount amount of zero for subtotals below the lowest threshold, null subtotals, and zero subtotals.
+  - getDiscountRate(BigDecimal subtotal): This method should return a discount rate of zero percent for subtotals below the lowest threshold.
+
+- Validations:
+  - Ensure that the subtotal is not null before performing any calculations.
+  - Validate that the subtotal is greater than or equal to zero.
+  - Check the subtotal against the lowest threshold defined in the BusinessConfig.Promotions.Tier1 configuration.
+
+- Integration Points:
+  - The feature must integrate with the BusinessConfig class to retrieve the discount thresholds and percentages.
+  - The feature must be tested using the DiscountServiceTest class to ensure compliance with the acceptance criteria.
+
+- Database Schema Changes:
+  - No changes to the database schema are required for this feature as it operates entirely within the application logic.
+
+By implementing these requirements, the system will ensure that discounts are applied only to eligible orders, maintaining the integrity and transparency of the discount system.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class DiscountService {
+        +calculateDiscount(BigDecimal subtotal) BigDecimal
+        +getDiscountRate(BigDecimal subtotal) BigDecimal
+    }
+    class BusinessConfig {
+        +Promotions promotions
+    }
+    class Promotions {
+        +DiscountTier tier1
+        +DiscountTier tier2
+        +DiscountTier tier3
+    }
+    class DiscountTier {
+        +BigDecimal threshold
+        +BigDecimal discount
+    }
+    DiscountService --> BusinessConfig
+    BusinessConfig --> Promotions
+    Promotions --> DiscountTier
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant DiscountService
+    participant BusinessConfig
+    participant Promotions
+    participant DiscountTier
+    User -> DiscountService: calculateDiscount(subtotal)
+    DiscountService -> BusinessConfig: getPromotions()
+    BusinessConfig -> Promotions: getTier1()
+    Promotions -> DiscountTier: getThreshold()
+    DiscountService -> DiscountTier: compareTo(subtotal)
+    DiscountService -> User: Return discount amount (0 if below threshold)
+```
+
+
+## Automate Nightly Inventory Replenishment
+
+The nightly inventory replenishment feature automates the process of restocking products with low inventory levels. This process runs daily at 2 AM and ensures that products below a defined stock threshold are replenished to a configured quantity. By automating this task, the feature reduces manual intervention, ensures consistent stock levels, and improves operational efficiency. It uses batch processing to handle large inventories and logs all replenishment actions for audit purposes. This feature is essential for maintaining product availability, preventing stockouts, and supporting smooth business operations.
+
+### Technical Requirements
+
+The nightly inventory replenishment feature should be implemented as a scheduled task within the InventoryService class. This task will run daily at 2 AM, triggered by the @Scheduled annotation with the cron expression "0 0 2 * * ?". The process will identify products with stock levels below a defined threshold and replenish them to a configured quantity. The replenishment logic should use batch processing with pagination to handle large inventories efficiently. Each batch will fetch a subset of products using the ProductRepository's findProductsNeedingReplenishment method, and the replenishment will be performed by the replenishProduct method. The stock updates must be persisted in the database, and audit logs should be created for each replenished product using the AuditLogRepository. If an error occurs during the process, an error audit log should be created detailing the issue. Upon successful completion, a summary audit log should be generated, indicating the total number of products replenished. The system should validate that the inventory system is operational before starting the process. If no products meet the low stock threshold, the process should terminate gracefully, and a summary log should indicate zero products replenished. Integration points include the BusinessConfig class for retrieving replenishment thresholds and quantities, and the database schema for persisting stock updates and audit logs. No changes to the database schema are required as the existing Product and AuditLog entities already support the necessary attributes.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class InventoryService {
+        +performNightlyReplenishment()
+        +replenishProduct(productId: Long, quantity: int)
+        -replenishProduct(product: Product, quantity: int)
+        +getLowStockProducts(threshold: int, pageable: Pageable): Page<Product>
+    }
+    class ProductRepository {
+        +findProductsNeedingReplenishment(threshold: int, pageable: Pageable): Page<Product>
+        +save(product: Product): Product
+    }
+    class AuditLogRepository {
+        +save(auditLog: AuditLog): AuditLog
+    }
+    class BusinessConfig {
+        +getInventory(): InventoryConfig
+    }
+    class InventoryConfig {
+        +getDefaultRestockQuantity(): int
+    }
+    InventoryService --> ProductRepository
+    InventoryService --> AuditLogRepository
+    InventoryService --> BusinessConfig
+    ProductRepository --> Product
+    AuditLogRepository --> AuditLog
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Scheduler
+    participant InventoryService
+    participant ProductRepository
+    participant AuditLogRepository
+    participant BusinessConfig
+    Scheduler -> InventoryService: Trigger performNightlyReplenishment()
+    InventoryService -> BusinessConfig: Get replenishment threshold and quantity
+    BusinessConfig -> InventoryService: Return threshold and quantity
+    loop Batch Processing
+        InventoryService -> ProductRepository: Fetch products below threshold
+        ProductRepository -> InventoryService: Return paginated products
+        loop For each product
+            InventoryService -> ProductRepository: Update stock quantity
+            InventoryService -> AuditLogRepository: Create audit log for product
+        end
+    end
+    alt No products below threshold
+        InventoryService -> AuditLogRepository: Create summary log with zero products replenished
+    else Products replenished
+        InventoryService -> AuditLogRepository: Create summary log with total products replenished
+    end
+```
+
+
+## Manually Trigger Inventory Replenishment
+
+The feature allows authorized users to manually trigger the inventory replenishment process through a REST API endpoint. This functionality is essential for scenarios where immediate replenishment is required, such as during testing or in response to unexpected inventory shortages. By providing a manual trigger, the system ensures flexibility and responsiveness, enabling users to maintain optimal inventory levels and prevent stockouts.
+
+### Technical Requirements
+
+The feature to manually trigger inventory replenishment should adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The functionality must integrate seamlessly with the existing Spring Boot REST API architecture.
+  - Ensure that the manual trigger does not conflict with the scheduled replenishment process, which runs nightly at 2 AM.
+  - Implement transactional boundaries to maintain data consistency during the replenishment process.
+
+- Involved Modules/Classes:
+  - AdminController: Define the endpoint /api/admin/trigger-replenishment to handle POST requests.
+  - InventoryService: Utilize the triggerManualReplenishment method to initiate the replenishment process.
+  - AuditLogRepository: Log details of the operation, including the user who triggered it and the timestamp.
+
+- Relevant Interfaces or Methods:
+  - REST API endpoint: POST /api/admin/trigger-replenishment.
+  - Method: InventoryService.triggerManualReplenishment() to execute the replenishment logic.
+  - Method: AuditLog.replenishmentLog() to record operation details.
+
+- Database Schema Changes:
+  - No changes required to the database schema as the AuditLog entity already supports logging operation details.
+
+- Validations:
+  - Validate user authorization before allowing access to the endpoint.
+  - Ensure that the replenishment process does not overlap with ongoing scheduled tasks.
+  - Handle system errors gracefully by returning appropriate error messages to the user.
+
+- Integration Points:
+  - Integrate with the InventoryService to execute the replenishment logic.
+  - Use AuditLogRepository to persist operation details for auditing purposes.
+  - Ensure compatibility with existing logging and monitoring systems.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerReplenishment() ResponseEntity
+    }
+    class InventoryService {
+        +triggerManualReplenishment() void
+    }
+    class AuditLogRepository {
+        +save(AuditLog) void
+    }
+    class AuditLog {
+        +replenishmentLog(Long, String, String) AuditLog
+    }
+    AdminController --> InventoryService
+    AdminController --> AuditLogRepository
+    AuditLogRepository --> AuditLog
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant AdminController
+    participant InventoryService
+    participant AuditLogRepository
+    User -> AdminController: POST /api/admin/trigger-replenishment
+    AdminController -> InventoryService: triggerManualReplenishment()
+    InventoryService -> InventoryService: Execute replenishment logic
+    InventoryService -> AuditLogRepository: Save operation details
+    AdminController -> User: Return success or error response
+```
+
+
+## Replenish Specific Product
+
+The 'Replenish Specific Product' feature allows administrative users to manually increase the stock quantity of a specific product in the inventory system. This feature is essential for scenarios where automated replenishment processes are insufficient or unavailable, such as during urgent restocking needs or testing. By enabling manual replenishment, the feature ensures that inventory levels can be adjusted promptly to meet demand, thereby preventing stockouts and ensuring customer satisfaction.
+
+### Technical Requirements
+
+
+## Audit Inventory Replenishment Operations
+
+This feature ensures that all inventory replenishment operations, whether automated or manual, are logged for traceability and accountability. By recording details such as the product ID, SKU, quantity replenished, and any errors encountered, the system provides a comprehensive audit trail. This is essential for monitoring inventory changes, diagnosing issues, and maintaining compliance with operational standards. Users benefit from enhanced transparency and the ability to review historical replenishment activities, which supports better decision-making and operational oversight.
+
+### Technical Requirements
+
+
+## Fetch Low Stock Products for Replenishment
+
+The feature allows users to fetch a list of products that have stock levels below a specified threshold. This functionality is essential for inventory management, enabling administrators to identify products that need replenishment. By providing a paginated list, the feature ensures scalability and usability even for large inventories. It benefits users by streamlining the replenishment process, reducing the risk of stockouts, and improving operational efficiency.
+
+### Technical Requirements
+
+The feature to fetch low stock products for replenishment should adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - Ensure the feature integrates seamlessly with the existing InventoryService class, leveraging its method for fetching low stock products.
+  - Implement pagination to handle large inventories efficiently, ensuring scalability and performance.
+  - Ensure the feature adheres to the existing service layer architecture and transactional boundaries.
+
+- Involved Modules/Classes:
+  - InventoryService: Utilize the getLowStockProducts method to fetch products below the specified threshold.
+  - ProductRepository: Use the findProductsNeedingReplenishment method to query the database for products with stock below the threshold.
+
+- Relevant Interfaces or Methods:
+  - REST API Endpoint: Create or update an endpoint in the AdminController to expose this functionality to users.
+  - Method: Ensure the getLowStockProducts method in InventoryService is properly utilized and tested.
+
+- Database Schema Changes:
+  - No changes to the database schema are required as the Product entity already includes attributes for stock quantity and active status.
+
+- Validations:
+  - Validate the threshold value provided by the user to ensure it is a positive integer.
+  - Ensure only active products are included in the response by filtering based on the active status attribute in the Product entity.
+  - Implement checks to ensure the response is consistent and accurate, avoiding duplicate or missing entries.
+
+- Integration Points:
+  - Integrate with the ProductRepository to fetch data using the findProductsNeedingReplenishment method.
+  - Ensure the feature is accessible via the AdminController, providing a user-friendly interface for administrators.
+  - Test the feature thoroughly using unit tests and integration tests to validate functionality and performance.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class InventoryService {
+        +getLowStockProducts(threshold: int, pageable: Pageable): Page<Product>
+    }
+    class ProductRepository {
+        +findProductsNeedingReplenishment(threshold: int, pageable: Pageable): Page<Product>
+    }
+    class Product {
+        -id: Long
+        -sku: String
+        -stockQuantity: Integer
+        -active: Boolean
+    }
+    InventoryService --> ProductRepository
+    ProductRepository --> Product
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant AdminController
+    participant InventoryService
+    participant ProductRepository
+    User -> AdminController: Request low stock products
+    AdminController -> InventoryService: Call getLowStockProducts(threshold, pageable)
+    InventoryService -> ProductRepository: Query findProductsNeedingReplenishment(threshold, pageable)
+    ProductRepository -> InventoryService: Return paginated list of products
+    InventoryService -> AdminController: Return paginated list
+    AdminController -> User: Respond with paginated list of low stock products
+```
+
+
+## View Custom Date Range Order Reports
+
+The 'View Custom Date Range Order Reports' feature allows users to generate and view order reports for a specific date range. This feature is essential for users who need to analyze order data for custom time periods, such as for auditing, performance tracking, or business analysis. By providing start and end dates, users can retrieve a detailed, paginated list of orders that fall within the specified range. This functionality ensures that users can access relevant data efficiently and in a format that supports further analysis or reporting.
+
+### Technical Requirements
+
+The 'View Custom Date Range Order Reports' feature must adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The feature should be implemented as part of the existing REST API architecture using Spring Boot.
+  - Ensure the feature integrates seamlessly with the ReportController and ReportService classes.
+  - Utilize the existing pagination mechanism provided by Spring Data.
+
+- Involved Modules/Classes:
+  - ReportController: Add a method to handle GET requests for custom date range order reports.
+  - ReportService: Implement a method to fetch order data filtered by the provided date range.
+  - OrderRepository: Use the existing findOrdersForReport method with JOIN FETCH to optimize data retrieval and prevent N+1 query issues.
+
+- Relevant Interfaces or Methods:
+  - API Endpoint: /api/reports/orders
+  - HTTP Method: GET
+  - Request Parameters: startDate (ISO.DATE_TIME), endDate (ISO.DATE_TIME), pageable (optional)
+  - Response: Paginated list of OrderReportResponse objects
+
+- Database Schema Changes:
+  - No changes required as the existing schema supports date-based filtering and pagination.
+
+- Validations:
+  - Validate that startDate and endDate are provided in ISO.DATE_TIME format.
+  - Return a 400 Bad Request error with a descriptive message if validation fails.
+  - Ensure that the endDate is greater than or equal to the startDate.
+
+- Integration Points:
+  - Integrate with the ReportService to fetch filtered data.
+  - Use the OrderRepository to execute optimized queries for fetching order data.
+  - Ensure proper error handling and logging for invalid requests.
+
+- Additional Considerations:
+  - Default pagination settings should be applied if no pagination parameters are provided.
+  - Return an empty paginated response if no orders exist within the specified date range.
+  - Ensure the feature is covered by unit and integration tests to validate functionality and edge cases.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class ReportController {
+        +getOrderReport(startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): ResponseEntity<Page<OrderReportResponse>>
+    }
+    class ReportService {
+        +getOrderReport(startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<OrderReportResponse>
+    }
+    class OrderRepository {
+        +findOrdersForReport(startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<OrderEntity>
+    }
+    class OrderEntity {
+        +createdAt: LocalDateTime
+        +updatedAt: LocalDateTime
+    }
+    class OrderReportResponse {
+        +from(order: OrderEntity): OrderReportResponse
+    }
+    ReportController --> ReportService
+    ReportService --> OrderRepository
+    OrderRepository --> OrderEntity
+    ReportService --> OrderReportResponse
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant ReportController
+    participant ReportService
+    participant OrderRepository
+    participant Database
+    User->>ReportController: GET /api/reports/orders?startDate&endDate&page&size
+    ReportController->>ReportService: getOrderReport(startDate, endDate, pageable)
+    ReportService->>OrderRepository: findOrdersForReport(startDate, endDate, pageable)
+    OrderRepository->>Database: Execute query with JOIN FETCH
+    Database-->>OrderRepository: Paginated order data
+    OrderRepository-->>ReportService: Page<OrderEntity>
+    ReportService-->>ReportController: Page<OrderReportResponse>
+    ReportController-->>User: ResponseEntity<Page<OrderReportResponse>>
+```
+
+
+## Access Today's Order Report
+
+The 'Access Today's Order Report' feature allows users to retrieve a paginated list of all orders created on the current date. This feature is essential for businesses to monitor daily sales performance, track operational metrics, and ensure timely order processing. By providing a paginated response, the feature ensures efficient data handling and usability, even when the number of orders is large. It benefits users by offering real-time insights into daily transactions, enabling better decision-making and operational efficiency.
+
+### Technical Requirements
+
+The 'Access Today's Order Report' feature should be implemented as a REST API endpoint within the existing ReportController class. The endpoint should be accessible via '/api/reports/orders/today' and should support pageable requests to ensure efficient handling of large datasets. The implementation should leverage the ReportService class to fetch data from the database using optimized queries that prevent N+1 problems. The service method getTodaysReport should be invoked to retrieve orders created on the current date. Default pagination settings (size=50, sort by 'createdAt') should be applied if pageable parameters are not provided. Validation should be performed on pageable parameters to ensure they are within acceptable ranges, and appropriate error responses should be returned for invalid inputs. The system should handle edge cases such as no orders existing for the current date by returning an empty paginated response. Error handling mechanisms should be in place to return 400 Bad Request for validation errors, 500 Internal Server Error for unexpected issues, and 401 Unauthorized for unauthorized access. The database schema does not require changes as the existing OrderEntity already supports filtering by creation date. Integration points include the ReportController for handling HTTP requests, the ReportService for business logic, and the OrderRepository for database queries.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class ReportController {
+        +getTodaysReport(Pageable pageable) ResponseEntity<Page<OrderReportResponse>>
+    }
+    class ReportService {
+        +getTodaysReport(Pageable pageable) Page<OrderReportResponse>
+    }
+    class OrderRepository {
+        +findOrdersForReport(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) Page<OrderEntity>
+    }
+    ReportController --> ReportService
+    ReportService --> OrderRepository
+    OrderRepository --> OrderEntity
+    class OrderEntity {
+        -createdAt: LocalDateTime
+    }
+    class OrderReportResponse {
+        -orderId: Long
+        -customerEmail: String
+        -createdAt: LocalDateTime
+    }
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant ReportController
+    participant ReportService
+    participant OrderRepository
+    User -> ReportController: GET /api/reports/orders/today
+    ReportController -> ReportService: getTodaysReport(pageable)
+    ReportService -> OrderRepository: findOrdersForReport(startOfDay, endOfDay, pageable)
+    OrderRepository -->> ReportService: Paginated OrderEntity
+    ReportService -->> ReportController: Paginated OrderReportResponse
+    ReportController -->> User: ResponseEntity<Page<OrderReportResponse>>
+```
+
+
+## Retrieve Last 30 Days Order Report
+
+The feature allows users to retrieve a paginated report of orders placed within the last 30 days. This report is accessible via a REST API endpoint and includes detailed information about each order, such as customer details, order items, and payment status. The feature is designed to support large datasets through pagination and optimized data fetching techniques, ensuring efficient performance. It is particularly useful for business users who need to analyze recent sales trends and operational metrics.
+
+### Technical Requirements
+
+The feature to retrieve the last 30 days order report should be implemented as a REST API endpoint within the existing ReportController class. The endpoint should be designed to handle large datasets efficiently by leveraging pagination and optimized data fetching techniques. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - Ensure the endpoint integrates seamlessly with the existing Spring Boot application architecture.
+  - Use the ReportService class to handle business logic and data retrieval.
+  - Implement optimized queries in the OrderRepository to prevent N+1 problems.
+
+- Involved Modules/Classes:
+  - ReportController: Define the endpoint GET /api/reports/orders/last-30-days.
+  - ReportService: Implement the method getLast30DaysReport(Pageable pageable) to fetch data.
+  - OrderRepository: Use the method findOrdersForReport(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) to retrieve data.
+  - OrderReportResponse: Ensure the DTO includes customer details, order items, and payment status.
+
+- Relevant Interfaces or Methods:
+  - Define the endpoint in ReportController with proper annotations for request handling.
+  - Use @PageableDefault to set default pagination parameters.
+  - Validate pagination parameters using Spring's built-in validation mechanisms.
+
+- Database Schema Changes:
+  - No changes to the database schema are required as the existing OrderEntity and related tables already support the required data structure.
+
+- Validations:
+  - Validate pagination parameters to ensure they are within acceptable ranges.
+  - Return a validation error response if invalid parameters are provided.
+
+- Integration Points:
+  - Integrate with the OrderRepository to fetch data using optimized queries.
+  - Map the retrieved data to OrderReportResponse DTOs for API responses.
+  - Ensure the endpoint is accessible via the defined URL and adheres to RESTful principles.
+
+The implementation should ensure that the report includes all relevant order details, such as customer information, order items, and payment status, and supports default pagination settings when no parameters are provided.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class ReportController {
+        +getLast30DaysReport(Pageable pageable) ResponseEntity<Page<OrderReportResponse>>
+    }
+    class ReportService {
+        +getLast30DaysReport(Pageable pageable) Page<OrderReportResponse>
+    }
+    class OrderRepository {
+        +findOrdersForReport(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) Page<OrderEntity>
+    }
+    class OrderReportResponse {
+        +Long orderId
+        +String customerEmail
+        +String customerName
+        +String status
+        +BigDecimal subtotal
+        +BigDecimal discountAmount
+        +BigDecimal total
+        +int itemCount
+        +LocalDateTime createdAt
+        +String paymentStatus
+    }
+    ReportController --> ReportService
+    ReportService --> OrderRepository
+    OrderRepository --> OrderEntity
+    OrderEntity --> OrderReportResponse
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant ReportController
+    participant ReportService
+    participant OrderRepository
+    participant Database
+    User -> ReportController: GET /api/reports/orders/last-30-days?page=0&size=50
+    ReportController -> ReportService: getLast30DaysReport(Pageable pageable)
+    ReportService -> OrderRepository: findOrdersForReport(startDate, endDate, pageable)
+    OrderRepository -> Database: Execute optimized query
+    Database -->> OrderRepository: Return paginated order data
+    OrderRepository -->> ReportService: Return Page<OrderEntity>
+    ReportService -->> ReportController: Return Page<OrderReportResponse>
+    ReportController -->> User: Return paginated report data
+```
+
+
+## Generate Current Month Order Report
+
+The feature allows users to generate a detailed report of all orders placed within the current calendar month. This report is accessible via a REST API endpoint and supports pagination to handle large datasets. It includes comprehensive order details such as customer information, order items, and payment status. The report is optimized to prevent N+1 query issues, ensuring efficient data retrieval. This feature is essential for monthly business reviews, helping users analyze sales trends, customer behavior, and operational performance for the current month.
+
+### Technical Requirements
+
+
+## Optimize Data Fetching for Reports
+
+The feature enables efficient generation of order reports by optimizing data fetching and preventing N+1 query problems. It supports date range filtering and pagination to handle large datasets effectively. By using JOIN FETCH queries and optimized DTOs, the feature ensures that customer and payment details are included in the reports without additional queries. This functionality is essential for businesses to analyze order data efficiently and make informed decisions based on accurate and comprehensive reports.
+
+### Technical Requirements
+
+
+## Paginate Large Order Reports
+
+The 'Paginate Large Order Reports' feature allows users to generate and view order reports for the last 30 days in a paginated format. This feature is essential for handling large datasets efficiently, ensuring that users can access the data they need without performance issues. By implementing pagination, users can navigate through large volumes of order data seamlessly. Additionally, the feature supports date range filtering and optimized data fetching to prevent N+1 query problems, making it both user-friendly and performance-efficient.
+
+### Technical Requirements
+
+
+## Prevent N+1 Issues in Reporting
+
+The feature aims to enhance the reporting functionality by addressing N+1 query issues, which occur when related entities are fetched individually, leading to performance bottlenecks. By implementing JOIN FETCH queries, the system will preload all necessary related entities in a single query, ensuring efficient data retrieval. This feature also includes pagination to handle large datasets and date range filtering for flexible reporting. Users benefit from faster report generation and comprehensive data inclusion, making the reporting process more reliable and user-friendly.
+
+### Technical Requirements
+
+To address N+1 query issues in reporting, the system must implement JOIN FETCH queries in the repository layer to preload related entities such as customer information, order items, and payment data in a single query. This ensures efficient data retrieval and prevents performance bottlenecks. Pagination must be integrated to handle large datasets effectively, ensuring that the system remains performant and user-friendly. Date range filtering should be implemented to allow users to specify the time frame for the report, ensuring that only relevant orders are included. The reporting functionality must include all necessary details, such as customer information, order items, and payment data, in the generated report. Validation must ensure that the date range parameters are in the correct format and that the pagination parameters are within acceptable limits. Integration points include the repository layer for data fetching, the service layer for business logic, and the controller layer for handling user requests. No changes to the database schema are required as the existing schema supports the necessary relationships and attributes.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class OrderRepository {
+        +findOrdersForReport(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable): Page<OrderEntity>
+    }
+    class ReportService {
+        +getOrderReport(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable): Page<OrderReportResponse>
+    }
+    class ReportController {
+        +getOrderReport(startDate, endDate, pageable): ResponseEntity<Page<OrderReportResponse>>
+    }
+    OrderRepository --> OrderEntity
+    ReportService --> OrderRepository
+    ReportController --> ReportService
+    class OrderEntity {
+        +customer : Customer
+        +items : List<OrderItem>
+        +payment : Payment
+    }
+    class Customer {
+        +email : String
+        +name : String
+    }
+    class OrderItem {
+        +productSku : String
+        +quantity : Integer
+    }
+    class Payment {
+        +status : String
+    }
+    OrderEntity --> Customer
+    OrderEntity --> OrderItem
+    OrderEntity --> Payment
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant ReportController
+    participant ReportService
+    participant OrderRepository
+    participant Database
+    User -> ReportController: Request report with date range
+    ReportController -> ReportService: Fetch report data
+    ReportService -> OrderRepository: Query orders with JOIN FETCH
+    OrderRepository -> Database: Execute query
+    Database -->> OrderRepository: Return orders with related entities
+    OrderRepository -->> ReportService: Return paginated data
+    ReportService -->> ReportController: Return report data
+    ReportController -->> User: Return report response
+```
+
+
+## Trigger Inventory Replenishment
+
+The 'Trigger Inventory Replenishment' feature allows administrators to manually initiate the inventory replenishment process via a dedicated API endpoint. This feature is essential for testing and development purposes, enabling admins to verify the functionality of scheduled replenishment tasks without waiting for automated triggers. By providing immediate feedback through JSON responses, the feature ensures transparency and operational clarity, helping users identify and resolve issues promptly. Additionally, audit logs are generated to maintain a record of all manual replenishment activities, supporting accountability and traceability.
+
+### Technical Requirements
+
+The 'Trigger Inventory Replenishment' feature must adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The feature should be implemented as part of the AdminController class, leveraging the existing Spring Boot framework.
+  - Ensure the endpoint '/api/admin/trigger-replenishment' is properly mapped to a POST request using the @PostMapping annotation.
+  - The InventoryService class should handle the core logic for triggering manual replenishment, ensuring separation of concerns.
+
+- Involved Modules/Classes:
+  - AdminController: Responsible for exposing the API endpoint and handling HTTP requests.
+  - InventoryService: Contains the business logic for inventory replenishment.
+  - AuditLogRepository: Used to persist audit logs for manual replenishment activities.
+
+- Relevant Interfaces or Methods:
+  - AdminController.triggerReplenishment(): This method should invoke InventoryService.triggerManualReplenishment() and return a JSON response.
+  - InventoryService.triggerManualReplenishment(): Executes the replenishment logic and handles any exceptions.
+  - AuditLog.replenishmentLog(): Generates an audit log entry for the replenishment operation.
+
+- Database Schema Changes:
+  - No changes to the database schema are required as the AuditLog entity already supports logging operations.
+
+- Validations:
+  - Ensure the InventoryService.triggerManualReplenishment() method validates the replenishment process and handles errors gracefully.
+  - Validate that the response includes a status ('success' or 'error') and a message providing operational feedback.
+
+- Integration Points:
+  - The AdminController should integrate with InventoryService for business logic execution.
+  - Audit logs should be persisted using AuditLogRepository to maintain traceability.
+  - The response should be constructed using org.springframework.http.ResponseEntity to ensure proper HTTP status codes and JSON formatting.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerReplenishment() ResponseEntity
+    }
+    class InventoryService {
+        +triggerManualReplenishment() void
+    }
+    class AuditLog {
+        +replenishmentLog(Long productId, String sku, int quantity) AuditLog
+    }
+    AdminController --> InventoryService
+    InventoryService --> AuditLog
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Admin as AdminController
+    participant Service as InventoryService
+    participant Audit as AuditLogRepository
+    Admin->Service: triggerManualReplenishment()
+    Service->Audit: Save replenishment log
+    Service-->Admin: Return success/error response
+```
+
+
+## Trigger Loyalty Points Processing
+
+The feature allows administrators to manually trigger the processing of loyalty points for paid orders. This functionality is essential for testing, debugging, and ensuring timely updates to customer loyalty points in scenarios where scheduled jobs may be delayed or require manual intervention. By providing this capability, administrators can ensure the accuracy and reliability of the loyalty program, enhancing customer satisfaction and operational efficiency.
+
+### Technical Requirements
+
+
+## Replenish Specific Product
+
+The feature allows administrators to replenish the stock of a specific product by providing its ID and the desired quantity. This functionality is essential for maintaining inventory levels and ensuring product availability for customers. By enabling manual replenishment, administrators can quickly address stock shortages or prepare for anticipated demand. The feature benefits users by ensuring that products remain available for purchase, reducing the likelihood of stockouts and improving customer satisfaction.
+
+### Technical Requirements
+
+The feature to replenish specific product stock should be implemented as a REST API endpoint within the AdminController class. The endpoint will accept a product ID and quantity as input parameters and perform the following operations:
+
+- Architecture considerations: Ensure the operation is atomic to maintain data consistency. Use transactional boundaries to prevent partial updates in case of errors.
+- Involved modules/classes: Utilize the InventoryService class for business logic related to stock updates and audit logging. The AdminController class will handle the API request and response.
+- Relevant interfaces or methods: Implement the endpoint using the @PostMapping annotation in AdminController. The InventoryService.replenishProduct method will be invoked to update stock levels.
+- Database schema changes: No changes are required as the Product entity already includes fields for stockQuantity and audit logging is supported by the AuditLog entity.
+- Validations: Validate the product ID to ensure it exists in the database. Check that the quantity is a positive integer. Return appropriate error messages for invalid inputs.
+- Integration points: Log the replenishment action in the AuditLog repository. Ensure the operation is logged with details such as product ID, quantity, and timestamp.
+
+The endpoint should return a success status and a descriptive message upon successful replenishment. In case of errors, return an appropriate HTTP status code and error message.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerReplenishment()
+        +triggerLoyaltyProcessing()
+        +replenishProduct(productId: Long, quantity: int)
+    }
+    class InventoryService {
+        +replenishProduct(productId: Long, quantity: int)
+        +triggerManualReplenishment()
+    }
+    class ProductRepository {
+        +findById(productId: Long): Optional<Product>
+        +save(product: Product): Product
+    }
+    class AuditLogRepository {
+        +save(auditLog: AuditLog): AuditLog
+    }
+    AdminController --> InventoryService
+    InventoryService --> ProductRepository
+    InventoryService --> AuditLogRepository
+    class Product {
+        -id: Long
+        -sku: String
+        -stockQuantity: int
+        -active: Boolean
+    }
+    class AuditLog {
+        -id: Long
+        -operationType: String
+        -details: String
+        -timestamp: LocalDateTime
+    }
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant AdminController
+    participant InventoryService
+    participant ProductRepository
+    participant AuditLogRepository
+    AdminController->>InventoryService: replenishProduct(productId, quantity)
+    InventoryService->>ProductRepository: findById(productId)
+    ProductRepository-->>InventoryService: Product
+    InventoryService->>ProductRepository: save(updatedProduct)
+    InventoryService->>AuditLogRepository: save(auditLog)
+    AuditLogRepository-->>InventoryService: AuditLog
+    InventoryService-->>AdminController: Success Response
+```
+
+
+## User can authorize payments through external services
+
+This feature allows users to authorize payments for their orders through an external payment service. The system integrates with the external service to handle payment authorization, ensuring reliability through retry logic for transient errors and mapping client errors to domain-specific exceptions. It provides transactional consistency, updates payment and order statuses upon successful authorization, and logs errors for failed attempts. This feature is essential for ensuring secure and reliable payment processing, enhancing user trust and operational efficiency.
+
+### Technical Requirements
+
+
+## System retries payment authorization on temporary service failures
+
+The system implements retry logic for payment authorization requests to handle temporary service failures. This feature ensures that payment authorization attempts are retried automatically when transient errors occur, such as server unavailability or network issues. By retrying failed attempts, the system improves reliability and reduces manual intervention, ensuring a smoother user experience during payment processing.
+
+### Technical Requirements
+
+The system must implement retry logic for payment authorization requests to handle temporary service failures. This feature should be integrated into the PaymentService class, leveraging the @Retryable annotation provided by Spring Framework. The retry mechanism must be configured to retry up to 2 times for transient errors, such as 5xx server errors or network issues, with a backoff delay of 1 second between attempts. The system should differentiate between retryable and non-retryable errors, ensuring that 4xx errors are mapped to domain exceptions without retrying.
+
+Key architecture considerations include:
+- Ensuring transactional consistency during retries to avoid duplicate or partial updates.
+- Logging all retry attempts and failures for monitoring and debugging purposes.
+- Using the WebClient for external service calls, with proper timeout configurations to handle network delays.
+
+Involved modules and classes:
+- PaymentService: Implements the retry logic and handles payment authorization.
+- PaymentException: Represents errors during payment processing, with a retryable flag to indicate whether the error can be retried.
+- PaymentRepository: Persists payment status updates and retry attempts.
+
+Relevant interfaces and methods:
+- authorizePayment(Long orderId): Public method in PaymentService that initiates the payment authorization process.
+- callExternalPaymentService(BigDecimal amount): Private method in PaymentService that interacts with the external payment service.
+- isRetryable(): Method in PaymentException to check if the exception is retryable.
+
+Validations:
+- Ensure that the payment amount is greater than 0.01 before initiating authorization.
+- Validate the response from the external service to confirm it contains a valid authorization ID.
+- Mark payments as failed and log errors if the maximum retry attempts are reached or if the response is invalid.
+
+Integration points:
+- External payment service: The system must handle responses from the service, including success, 4xx errors, 5xx errors, and invalid responses.
+- Logging framework: All retry attempts and errors must be logged for operational visibility.
+
+No changes to the database schema are required for this feature, as the retryAttempts field in the Payment entity already tracks the number of retries.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class PaymentService {
+        +authorizePayment(Long orderId): Payment
+        -callExternalPaymentService(BigDecimal amount): String
+    }
+    class PaymentException {
+        +isRetryable(): boolean
+    }
+    class PaymentRepository {
+        +save(Payment payment): void
+    }
+    class Payment {
+        +retryAttempts: Integer
+        +status: PaymentStatus
+        +externalAuthorizationId: String
+    }
+    PaymentService --> PaymentRepository
+    PaymentService --> PaymentException
+    PaymentService --> Payment
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant PaymentService
+    participant ExternalPaymentService
+    participant PaymentRepository
+    User -> PaymentService: Initiate payment authorization
+    PaymentService -> ExternalPaymentService: Send authorization request
+    ExternalPaymentService -->> PaymentService: 5xx error
+    PaymentService -> PaymentService: Retry after 1 second
+    PaymentService -> ExternalPaymentService: Send authorization request
+    ExternalPaymentService -->> PaymentService: Authorization ID
+    PaymentService -> PaymentRepository: Update payment status to authorized
+    PaymentService -->> User: Payment authorized
+```
+
+
+## User can void payments for canceled orders
+
+The feature allows users to void payments associated with canceled orders. This ensures that payments are not processed for orders that are no longer valid, maintaining transactional consistency and preventing financial discrepancies. The void operation updates the payment status to VOIDED and logs the action for audit purposes. It also handles server errors gracefully, retrying the operation if necessary. This feature benefits users by ensuring accurate payment processing and providing a reliable mechanism for handling canceled orders.
+
+### Technical Requirements
+
+The feature to void payments for canceled orders must ensure transactional consistency and prevent financial discrepancies. The implementation should adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The void operation must be integrated into the existing payment service architecture, leveraging the retry logic and error handling mechanisms already in place.
+  - Ensure the operation is transactional to maintain consistency across payment and order records.
+
+- Involved Modules/Classes:
+  - PaymentService: Extend the voidPayment method to include validation checks for payment status and authorization ID.
+  - PaymentRepository: Utilize the findByOrderId and findByExternalAuthorizationId methods to fetch payment details.
+  - AuditLogRepository: Log the void operation for audit purposes.
+  - OrderEntity: Ensure the order status is updated to CANCELLED before voiding the payment.
+
+- Relevant Interfaces or Methods:
+  - PaymentService.voidPayment(Long paymentId): Enhance this method to validate payment status, authorization ID, and handle retries for server errors.
+  - PaymentRepository.findByOrderId(Long orderId): Fetch payment details associated with the canceled order.
+  - PaymentRepository.findByExternalAuthorizationId(String authorizationId): Validate the authorization ID before proceeding.
+  - AuditLogRepository.save(AuditLog auditLog): Log the void operation.
+
+- Database Schema Changes:
+  - No changes required to the database schema as the existing Payment entity already supports status tracking and authorization ID.
+
+- Validations:
+  - Validate that the payment is in AUTHORIZED state before voiding.
+  - Ensure the authorization ID is present and valid.
+  - Prevent voiding payments that are already in VOIDED or FAILED states.
+  - Ensure the payment cannot be voided multiple times.
+
+- Integration Points:
+  - Integrate with the external payment service to void the payment using the authorization ID.
+  - Handle server errors gracefully by retrying the operation up to a configured limit.
+  - Map external service errors to domain-specific exceptions for consistent error handling.
+
+- Additional Considerations:
+  - Ensure the void operation updates related records, such as order status and payment retry attempts, to maintain transactional consistency.
+  - Implement unit tests to validate all acceptance criteria, including error scenarios and retry logic.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class PaymentService {
+        +voidPayment(Long paymentId)
+        +callExternalVoidService(String authorizationId)
+    }
+    class PaymentRepository {
+        +findByOrderId(Long orderId)
+        +findByExternalAuthorizationId(String authorizationId)
+    }
+    class AuditLogRepository {
+        +save(AuditLog auditLog)
+    }
+    class OrderEntity {
+        +cancel()
+        +getPayment()
+    }
+    class Payment {
+        +authorize(String authorizationId)
+        +voidPayment()
+        +getStatus()
+    }
+    PaymentService --> PaymentRepository
+    PaymentService --> AuditLogRepository
+    PaymentService --> OrderEntity
+    OrderEntity --> Payment
+    Payment --> PaymentRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant OrderService
+    participant PaymentService
+    participant PaymentRepository
+    participant ExternalPaymentService
+    participant AuditLogRepository
+    User -> OrderService: Cancel Order
+    OrderService -> PaymentService: Void Payment
+    PaymentService -> PaymentRepository: Fetch Payment by Order ID
+    PaymentRepository -->> PaymentService: Payment Details
+    PaymentService -> ExternalPaymentService: Void Payment using Authorization ID
+    ExternalPaymentService -->> PaymentService: Response
+    PaymentService -> PaymentRepository: Update Payment Status to VOIDED
+    PaymentService -> AuditLogRepository: Log Void Operation
+    PaymentService -->> OrderService: Void Operation Completed
+    OrderService -->> User: Order Canceled and Payment Voided
+```
+
+
+## System maps 4xx errors to domain-specific exceptions
+
+This feature ensures that all 4xx HTTP errors returned by external services are mapped to domain-specific exceptions within the system. By doing so, the system can provide more meaningful error messages to users and developers, improving debugging and user experience. For example, a 404 error from an external service will be translated into a ResourceNotFoundException, making it clear what went wrong. This mapping also ensures that the system adheres to its business rules and provides consistent error handling across all modules.
+
+### Technical Requirements
+
+To implement the feature of mapping 4xx HTTP errors to domain-specific exceptions, the following technical requirements must be addressed:
+
+1. **Architecture Considerations**:
+   - The system must centralize error handling logic to ensure consistent mapping of 4xx errors across all modules.
+   - A global exception handler should be utilized to intercept and process exceptions thrown by external service integrations.
+   - The mapping logic should be extensible to accommodate future 4xx error codes and corresponding domain exceptions.
+
+2. **Involved Modules/Classes**:
+   - `PaymentService`: This class already demonstrates mapping 4xx errors to domain exceptions. The logic here should be extended and standardized for other services.
+   - `GlobalExceptionHandler`: This class should be updated to handle domain-specific exceptions and return appropriate HTTP responses with ProblemDetail objects.
+   - `ExternalServiceClient`: Any client classes interacting with external services should propagate 4xx errors to the centralized error handling mechanism.
+
+3. **Relevant Interfaces or Methods**:
+   - `PaymentService.callExternalPaymentService`: Enhance this method to include detailed mapping of 4xx errors to domain exceptions.
+   - `GlobalExceptionHandler.handleValidationException`, `handleBusinessValidationException`, `handleResourceNotFoundException`, and similar methods should be updated to include new domain exceptions like `UnauthorizedAccessException`, `ForbiddenAccessException`, and `ConflictException`.
+   - Introduce a utility method in a shared utility class to map HTTP status codes to domain exceptions.
+
+4. **Database Schema Changes**:
+   - No changes to the database schema are required for this feature.
+
+5. **Validations**:
+   - Ensure that all 4xx errors are correctly identified and mapped to the appropriate domain exceptions.
+   - Validate that unmapped 4xx errors are defaulted to a `GenericClientException` with a meaningful message.
+   - Ensure that all domain exceptions include a unique identifier and detailed message for logging and debugging purposes.
+
+6. **Integration Points**:
+   - External service integrations using `WebClient` in `PaymentService` and other service classes must propagate 4xx errors to the centralized error handling mechanism.
+   - The `MockPaymentController` should simulate various 4xx error scenarios to test the mapping logic.
+   - Update API endpoints to return standardized ProblemDetail objects for all domain exceptions.
+
+7. **Logging and Monitoring**:
+   - All domain exceptions should be logged with their unique identifier and detailed message.
+   - Implement monitoring to track the frequency and types of 4xx errors encountered, aiding in debugging and system improvement.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class PaymentService {
+        +callExternalPaymentService(BigDecimal amount): String
+        +voidPayment(Long paymentId): void
+    }
+    class GlobalExceptionHandler {
+        +handleValidationException(MethodArgumentNotValidException ex): ResponseEntity
+        +handleBusinessValidationException(BusinessValidationException ex): ResponseEntity
+        +handleResourceNotFoundException(ResourceNotFoundException ex): ResponseEntity
+        +handleDuplicateResourceException(DuplicateResourceException ex): ResponseEntity
+        +handlePaymentException(PaymentException ex): ResponseEntity
+        +handleIllegalStateException(IllegalStateException ex): ResponseEntity
+        +handleIllegalArgumentException(IllegalArgumentException ex): ResponseEntity
+        +handleGenericException(Exception ex): ResponseEntity
+    }
+    class ExternalServiceClient {
+        +makeRequest(String url, Map params): Response
+    }
+    PaymentService --> GlobalExceptionHandler
+    ExternalServiceClient --> GlobalExceptionHandler
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Client
+    participant PaymentService
+    participant ExternalService
+    participant GlobalExceptionHandler
+
+    Client->>PaymentService: Initiate Payment
+    PaymentService->>ExternalService: Call External Payment API
+    ExternalService-->>PaymentService: 4xx Error Response
+    PaymentService->>GlobalExceptionHandler: Propagate 4xx Error
+    GlobalExceptionHandler->>PaymentService: Map to Domain Exception
+    PaymentService-->>Client: Return ProblemDetail Object
+    Note over Client,PaymentService: Client receives meaningful error response
+```
+
+
+## System validates external payment service responses
+
+The system must validate responses from the external payment service to ensure proper handling of errors and successful transactions. This feature is critical for maintaining transactional integrity and providing clear feedback to users in case of issues.
+
+### Technical Requirements
+
+
+## User can test payment authorization using a mock service
+
+This feature allows users to test payment authorization scenarios using a mock service. The mock service simulates various real-world payment scenarios, including successful authorizations, validation errors, insufficient funds, and server errors. By providing a controlled environment for testing, this feature helps developers and testers validate their payment workflows without relying on live payment gateways. It ensures that applications can handle different payment outcomes effectively, improving reliability and user experience.
+
+### Technical Requirements
+
+The mock payment authorization service should be implemented as a REST API endpoint using the Spring Framework. The endpoint should be accessible via POST requests at /mock/payment/authorize. The service must simulate various payment scenarios, including successful authorizations, validation errors, insufficient funds, and server errors, to provide a controlled testing environment for developers and testers. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - The service should be designed as part of the MockPaymentController class, leveraging Spring Boot's REST capabilities.
+  - Ensure the service is stateless to allow concurrent testing by multiple users.
+  - Implement proper exception handling to return meaningful error messages for invalid requests.
+
+- Involved Modules/Classes:
+  - MockPaymentController: Contains the /mock/payment/authorize endpoint.
+  - PaymentService: Handles business logic for payment authorization and integrates with external services if needed.
+  - Payment entity: Represents payment details and status.
+
+- Relevant Interfaces or Methods:
+  - POST /mock/payment/authorize: Accepts a JSON payload with payment details.
+  - authorize method in MockPaymentController: Processes the request and returns appropriate responses based on the input.
+
+- Validations:
+  - Amount must be greater than or equal to 0.01; otherwise, return a 400 status with the error message 'Amount must be at least 0.01'.
+  - Amounts greater than 1000 should return a 402 status with the error message 'Insufficient funds'.
+  - Invalid requests should return a 400 status with the error message 'Invalid request: <error details>'.
+
+- Integration Points:
+  - Randomly simulate server errors (500 status) with a 10% probability to test retry logic.
+  - Ensure responses are returned within a reasonable time frame to simulate real-world conditions.
+
+- Database Schema Changes:
+  - No changes required as the mock service does not persist data.
+
+- Additional Considerations:
+  - Use ThreadLocalRandom for simulating server errors.
+  - Generate unique authorization IDs using UUID for successful transactions.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class MockPaymentController {
+        +authorize(request: Map<String, Object>): ResponseEntity
+    }
+    class PaymentService {
+        +callExternalPaymentService(amount: BigDecimal): String
+        +authorizePayment(orderId: Long): Payment
+    }
+    class Payment {
+        +id: Long
+        +amount: BigDecimal
+        +status: PaymentStatus
+        +externalAuthorizationId: String
+    }
+    class PaymentStatus {
+        <<enumeration>>
+        PENDING
+        AUTHORIZED
+        FAILED
+        VOIDED
+    }
+    MockPaymentController --> PaymentService
+    PaymentService --> Payment
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant MockPaymentController
+    participant PaymentService
+    participant ExternalService
+
+    User -> MockPaymentController: POST /mock/payment/authorize
+    MockPaymentController -> PaymentService: Validate request
+    alt Valid request
+        PaymentService -> ExternalService: Simulate payment authorization
+        ExternalService -->> PaymentService: Authorization ID
+        PaymentService -> MockPaymentController: Return 200 with authorization ID
+    else Invalid request
+        PaymentService -> MockPaymentController: Return 400 with error message
+    else Insufficient funds
+        PaymentService -> MockPaymentController: Return 402 with error message
+    else Server error
+        PaymentService -> MockPaymentController: Return 500 with error message
+    end
+```
+
+
+## System handles payment voiding errors gracefully
+
+The system should provide robust error handling for payment voiding operations. This includes retrying void requests on transient errors, logging failures, and ensuring transactional consistency. The feature is essential for maintaining system reliability and user trust, especially in scenarios where external services are involved. By handling errors gracefully, the system minimizes disruptions and ensures accurate payment records.
+
+### Technical Requirements
+
+
+## System retries payment voiding on temporary service failures
+
+This feature ensures that the system can handle temporary failures in the external payment service when voiding payments. If the external service returns a 5xx error, the system will automatically retry the void operation up to two times with a delay between attempts. This functionality is crucial for maintaining reliability and ensuring that temporary issues do not disrupt the payment voiding process. By implementing retry logic, the system minimizes manual intervention and improves user experience by ensuring that void operations are completed successfully whenever possible. Additionally, the system ensures idempotency, preventing duplicate voids even with multiple retries.
+
+### Technical Requirements
+
+The system must implement retry logic for voiding payments in case of temporary external service failures. This functionality should be integrated into the existing payment voiding mechanism, ensuring reliability and idempotency. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - Utilize the existing Spring framework's @Retryable annotation to handle retry logic for voiding payments.
+  - Ensure that retries are limited to two attempts with a delay of one second between each attempt.
+  - Maintain idempotency by ensuring that duplicate void operations are not created during retries.
+
+- Involved Modules/Classes:
+  - Modify the PaymentService class to include retry logic for the voidPayment method.
+  - Ensure the MockPaymentController class simulates server errors appropriately for testing.
+
+- Relevant Interfaces or Methods:
+  - Update the voidPayment method in PaymentService to include retry logic using @Retryable.
+  - Ensure the callExternalVoidService method handles 5xx errors by throwing retryable exceptions.
+  - Log 4xx errors and prevent retries for such cases.
+
+- Database Schema Changes:
+  - No changes to the database schema are required for this feature.
+
+- Validations:
+  - Validate that the payment status is AUTHORIZED before attempting to void.
+  - Ensure that the external service response is correctly parsed to determine success or failure.
+
+- Integration Points:
+  - Integrate with the external payment service using WebClient for void operations.
+  - Map 5xx errors to retryable exceptions and 4xx errors to domain-specific exceptions.
+  - Log all failed attempts and notify the appropriate team if all retries fail.
+
+- Additional Requirements:
+  - Ensure comprehensive unit tests are added to verify retry logic, idempotency, and error handling.
+  - Include integration tests to simulate external service failures and validate system behavior.
+
+#### UML Diagram
+```mermaid
+classDiagram
+class PaymentService {
+  +voidPayment(paymentId: Long)
+  +callExternalVoidService(authorizationId: String)
+}
+class MockPaymentController {
+  +voidPayment(request: Map<String, Object>)
+}
+class WebClient {
+  +post()
+  +uri(url: String)
+  +bodyValue(request: Object)
+  +retrieve()
+}
+PaymentService --> MockPaymentController
+PaymentService --> WebClient
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+actor User
+participant PaymentService
+participant WebClient
+participant ExternalService
+User -> PaymentService: Request to void payment
+PaymentService -> WebClient: Send void request
+WebClient -> ExternalService: Void payment request
+ExternalService -->> WebClient: 5xx Error
+WebClient -->> PaymentService: Retryable exception
+PaymentService -> WebClient: Retry void request
+WebClient -> ExternalService: Void payment request
+ExternalService -->> WebClient: Success
+WebClient -->> PaymentService: Void successful
+PaymentService -> User: Payment voided successfully
+```
+
+
+## User can view error messages for failed payment authorizations
+
+This feature allows users to view detailed error messages when payment authorizations fail. It ensures that users are informed about the reasons for failure, such as insufficient funds, invalid amounts, or temporary service issues. By providing clear and actionable error messages, users can take corrective actions, such as retrying the payment or updating payment details. This feature enhances user experience by reducing confusion and frustration during payment processes.
+
+### Technical Requirements
+
+
+## Log Order Creation Events
+
+The feature enables the automatic creation of audit log entries whenever an order is successfully created in the system. These logs provide a detailed record of the operation, including the type of operation ('ORDER_CREATED'), the entity type ('Order'), the order ID, and additional details such as the customer email. This functionality is essential for maintaining a reliable history of system operations, ensuring accountability, and supporting troubleshooting efforts. By tracking order creation events, the feature helps administrators and developers monitor system activity, analyze trends, and ensure compliance with business rules and regulations.
+
+### Technical Requirements
+
+
+## Track Order Cancellation
+
+The 'Track Order Cancellation' feature ensures that every order cancellation event is recorded in an audit log. This feature is essential for maintaining a clear and traceable history of order cancellations, which is critical for compliance, reporting, and troubleshooting. By capturing details such as the order ID, timestamp, and reason for cancellation, the system provides transparency and accountability. This feature benefits users by enabling them to review and verify cancellation events, while also supporting administrative and legal requirements.
+
+### Technical Requirements
+
+
+## Monitor Payment Authorization
+
+The Monitor Payment Authorization feature enables the system to track and manage payment authorization requests effectively. This feature ensures that all payment authorization attempts, whether successful or failed, are logged in the AuditLog for transparency and traceability. It validates incoming requests, handles various error scenarios such as insufficient funds or external service unavailability, and provides appropriate responses to the client. By implementing retry logic for transient errors and logging all operations, this feature enhances the reliability and auditability of the payment process, benefiting both users and administrators.
+
+### Technical Requirements
+
+The Monitor Payment Authorization feature should be implemented as part of the payment processing system to ensure robust handling of payment authorization requests. The architecture must integrate with the existing PaymentService and AuditLog modules to log all operations and handle error scenarios effectively. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - Utilize the existing Spring WebClient-based PaymentService for external service calls.
+  - Ensure transactional consistency by leveraging Spring's @Transactional annotation for atomic operations.
+  - Implement retry logic using @Retryable for transient errors, with a maximum of two attempts and a backoff delay.
+
+- Involved Modules/Classes:
+  - PaymentService: Extend the authorizePayment method to include logging operations in the AuditLog.
+  - AuditLog: Add entries for successful and failed payment authorizations with relevant details.
+  - MockPaymentController: Handle validation, error responses, and simulate external service behavior.
+
+- Relevant Interfaces or Methods:
+  - PaymentService.authorizePayment(Long orderId): Enhance to log operations in AuditLog and handle error scenarios.
+  - AuditLog.orderCreatedLog(Long orderId, String customerEmail): Use for successful authorizations.
+  - AuditLog.orderCancelledLog(Long orderId, String reason): Adapt for failed authorizations.
+  - MockPaymentController.authorize(Map<String, Object> request): Validate input, simulate external service responses, and return appropriate HTTP status codes.
+
+- Database Schema Changes:
+  - No changes required as AuditLog already supports operation type and details fields.
+
+- Validations:
+  - Validate the amount field to ensure it is greater than or equal to 0.01.
+  - Return a 400 error for invalid request bodies with appropriate error messages.
+  - Return a 402 error for amounts exceeding 1000, indicating insufficient funds.
+  - Return a 500 error for transient external service unavailability to trigger retry logic.
+
+- Integration Points:
+  - External payment service: Simulate responses for authorization and error scenarios.
+  - AuditLog: Log all operations with relevant details for transparency and traceability.
+
+By meeting these requirements, the system will ensure reliable and auditable payment authorization handling, benefiting both users and administrators.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class PaymentService {
+        +authorizePayment(Long orderId): Payment
+        +voidPayment(Long paymentId): void
+    }
+    class AuditLog {
+        +orderCreatedLog(Long orderId, String customerEmail): AuditLog
+        +orderCancelledLog(Long orderId, String reason): AuditLog
+    }
+    class MockPaymentController {
+        +authorize(Map<String, Object> request): ResponseEntity
+        +voidPayment(Map<String, Object> request): ResponseEntity
+    }
+    PaymentService --> AuditLog
+    MockPaymentController --> PaymentService
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor User
+    participant MockPaymentController
+    participant PaymentService
+    participant AuditLog
+    participant ExternalPaymentService
+
+    User -> MockPaymentController: POST /authorize
+    MockPaymentController -> PaymentService: authorizePayment(orderId)
+    PaymentService -> ExternalPaymentService: Call external service
+    ExternalPaymentService -->> PaymentService: Response (success/failure)
+    PaymentService -> AuditLog: Log operation
+    PaymentService -> MockPaymentController: Return response
+    MockPaymentController -> User: HTTP status and authorization ID
+```
+
+
+## Log Inventory Replenishment
+
+The 'Log Inventory Replenishment' feature ensures that every inventory replenishment event, whether automated or manual, is recorded in an audit log. This feature is essential for maintaining a transparent and traceable history of stock adjustments, enabling administrators to monitor inventory changes and troubleshoot issues effectively. By capturing details such as the product SKU, quantity replenished, and the initiator of the event, this feature provides a comprehensive record that supports compliance, accountability, and operational insights.
+
+### Technical Requirements
+
+
+## Retrieve Audit Logs by Operation Type
+
+This feature allows users to retrieve a list of audit logs filtered by a specific operation type. It is designed to help administrators and auditors quickly access relevant logs for monitoring, compliance, and troubleshooting purposes. By providing a paginated response, the feature ensures that users can navigate through large datasets efficiently. The ability to filter by operation type enhances the usability of the audit log system, making it easier to pinpoint specific events or actions within the system.
+
+### Technical Requirements
+
+
+## Filter Audit Logs by Entity
+
+This feature allows users to filter and retrieve audit logs based on a specific entity type and entity ID. It is designed to help users track and analyze operations performed on particular entities, such as orders, products, or customers. By providing detailed logs, users can gain insights into the history of changes or actions associated with an entity. This functionality is essential for debugging, compliance, and operational monitoring, ensuring transparency and accountability in system operations.
+
+### Technical Requirements
+
+
+## Audit Log Timestamp Filtering
+
+The Audit Log Timestamp Filtering feature allows users to retrieve audit logs that fall within a specific date range. This feature is essential for users who need to analyze system activities or investigate issues that occurred during a particular time period. By providing a start and end timestamp, users can efficiently narrow down the logs to the relevant entries, saving time and improving the accuracy of their analysis. This functionality is particularly beneficial for compliance audits, security investigations, and operational monitoring.
+
+### Technical Requirements
+
+The Audit Log Timestamp Filtering feature should be implemented as follows:
+
+Architecture Considerations:
+- Ensure the feature integrates seamlessly with the existing repository and service layers.
+- Utilize Spring Data JPA for efficient querying and pagination.
+- Implement validation logic to handle invalid date ranges and malformed inputs.
+
+Involved Modules/Classes:
+- AuditLogRepository: Extend the existing method `findByTimestampBetween` to support date range filtering.
+- AuditLogService: Add a service method to handle business logic for timestamp filtering, including validation and pagination.
+- AuditLogController: Create a new endpoint to expose the filtering functionality to users.
+
+Relevant Interfaces or Methods:
+- Repository Method: `Page<AuditLog> findByTimestampBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable)`.
+- Service Method: `Page<AuditLog> getAuditLogsByTimestampRange(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable)`.
+- Controller Endpoint: `GET /api/audit-logs?startDate={startDate}&endDate={endDate}&page={page}&size={size}`.
+
+Database Schema Changes:
+- No changes required as the `audit_logs` table already includes a `timestamp` column suitable for filtering.
+
+Validations:
+- Validate that the start date is not after the end date.
+- Ensure the date inputs are in a valid format (e.g., ISO 8601).
+- Return appropriate error messages for invalid inputs or date ranges.
+
+Integration Points:
+- Integrate with the existing pagination framework to support paginated results.
+- Ensure compatibility with the audit logging mechanism for tracking user queries.
+- Provide comprehensive error handling and response formatting using Problem Details (RFC-7807).
+
+#### UML Diagram
+```mermaid
+classDiagram
+class AuditLogRepository {
+  +findByTimestampBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable): Page<AuditLog>
+}
+class AuditLogService {
+  +getAuditLogsByTimestampRange(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable): Page<AuditLog>
+}
+class AuditLogController {
+  +getAuditLogsByTimestampRange(startDate, endDate, page, size)
+}
+AuditLogRepository <|-- AuditLogService
+AuditLogService <|-- AuditLogController
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+User->>AuditLogController: Request audit logs with startDate, endDate, page, size
+AuditLogController->>AuditLogService: Validate inputs and process request
+AuditLogService->>AuditLogRepository: Query logs within date range
+AuditLogRepository-->>AuditLogService: Return paginated logs
+AuditLogService-->>AuditLogController: Return paginated logs
+AuditLogController-->>User: Respond with paginated logs
+```
+
+
+## Track Recent Audit Events
+
+The feature allows users to monitor and alert on recent audit events in the system. It provides a mechanism to retrieve audit logs created after a specific timestamp, enabling real-time tracking of system activities. This is essential for maintaining operational transparency, detecting anomalies, and ensuring compliance with monitoring requirements.
+
+### Technical Requirements
+
+
+## Automate Nightly Inventory Replenishment
+
+The nightly inventory replenishment feature automates the process of restocking products with low inventory levels. This process runs every day at 2 AM and identifies products whose stock falls below a predefined threshold. It replenishes these products to ensure sufficient stock levels are maintained. The feature is essential for preventing stockouts, improving customer satisfaction, and reducing manual intervention. It also includes audit logging for transparency and error handling to ensure data integrity. By automating this task, businesses can optimize inventory management and focus on other critical operations.
+
+### Technical Requirements
+
+
+## Enable Manual Trigger for Inventory Replenishment
+
+The feature allows administrators to manually trigger inventory replenishment for specific products. This functionality is essential for addressing urgent inventory needs, testing replenishment processes, and ensuring product availability during critical periods. By enabling manual replenishment, administrators can bypass scheduled jobs and directly manage stock levels, improving operational flexibility and responsiveness.
+
+### Technical Requirements
+
+The manual trigger for inventory replenishment should be implemented as a REST API endpoint within the AdminController class. The endpoint should allow administrators to specify a product ID and quantity for replenishment. If the quantity is not provided, the system should default to replenishing 100 units. The following technical requirements must be met:
+
+- Architecture Considerations:
+  - The feature should integrate seamlessly with the existing InventoryService class, leveraging its replenishProduct method.
+  - Ensure transactional integrity to prevent partial updates in case of errors.
+  - Implement proper error handling to return meaningful HTTP status codes and messages.
+
+- Involved Modules/Classes:
+  - AdminController: Define the endpoint POST /api/admin/replenish-product/{productId}.
+  - InventoryService: Use the replenishProduct method to update stock levels.
+  - AuditLogRepository: Log replenishment operations for traceability.
+
+- Relevant Interfaces or Methods:
+  - POST /api/admin/replenish-product/{productId}: Accepts PathVariable productId and RequestParam quantity.
+  - InventoryService.replenishProduct(Long productId, int quantity): Updates stock levels for the specified product.
+  - AuditLogRepository.save(AuditLog log): Records replenishment operations.
+
+- Database Schema Changes:
+  - No changes required as the existing Product and AuditLog tables already support the necessary attributes.
+
+- Validations:
+  - Validate that productId corresponds to an existing product; return 404 Not Found if not.
+  - Ensure quantity is greater than zero; return 400 Bad Request for invalid values.
+  - Default quantity to 100 if not provided.
+
+- Integration Points:
+  - The endpoint should interact with the InventoryService to update stock levels.
+  - Audit logs should be created for every successful replenishment operation.
+  - Error responses should be standardized using Problem Details JSON format.
+
+The implementation should ensure high reliability and maintainability, adhering to existing coding standards and patterns.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerReplenishment()
+        +triggerLoyaltyProcessing()
+        +replenishProduct(productId: Long, quantity: int): ResponseEntity
+    }
+    class InventoryService {
+        +replenishProduct(productId: Long, quantity: int): void
+    }
+    class AuditLogRepository {
+        +save(log: AuditLog): void
+    }
+    AdminController --> InventoryService
+    AdminController --> AuditLogRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Admin as AdminController
+    participant Inventory as InventoryService
+    participant Audit as AuditLogRepository
+    Admin->>Inventory: replenishProduct(productId, quantity)
+    Inventory-->>Admin: Success/Error Response
+    Admin->>Audit: save(AuditLog)
+    Audit-->>Admin: Log Saved
+```
+
+
+## Automate Loyalty Points Processing
+
+The Automate Loyalty Points Processing feature ensures that customers are rewarded with loyalty points for their purchases in a timely and efficient manner. This feature schedules a job to run every 30 minutes, automatically processing all orders that have recently transitioned to a 'PAID' status. By automating this process, the system eliminates the need for manual intervention, reduces errors, and ensures that customers receive their loyalty points promptly. The feature also enforces business rules such as idempotency, points calculation based on order total, and a maximum cap on loyalty points. This automation enhances customer satisfaction and streamlines the loyalty program's operations.
+
+### Technical Requirements
+
+
+## Enable Manual Trigger for Loyalty Points Processing
+
+This feature allows administrators to manually trigger the processing of loyalty points for eligible orders via a REST API endpoint. It is designed to provide flexibility for testing and operational needs, enabling administrators to process loyalty points outside of the scheduled job. This feature ensures that loyalty points are calculated and awarded accurately, adhering to business rules such as idempotency and points cap. By providing real-time feedback on the operation's success or failure, it enhances the system's usability and reliability for administrative users.
+
+### Technical Requirements
+
+The feature to enable manual triggering of loyalty points processing should adhere to the following technical requirements:
+
+- Architecture Considerations:
+  - The feature must integrate seamlessly with the existing AdminController class, which already provides endpoints for administrative operations.
+  - The implementation should leverage the existing LoyaltyService class to process loyalty points, ensuring consistency with scheduled operations.
+  - The system must ensure idempotency by checking the IdempotencyRecordRepository to avoid reprocessing orders that have already been handled.
+  - Audit logging must be implemented using the AuditLogRepository to record details of the operation for traceability and compliance.
+
+- Involved Modules/Classes:
+  - AdminController: Extend this class to include the new endpoint for manual loyalty points processing.
+  - LoyaltyService: Utilize the triggerManualLoyaltyProcessing method to process eligible orders.
+  - IdempotencyRecordRepository: Ensure idempotency by verifying existing records before processing.
+  - AuditLogRepository: Log operation details, including the number of orders processed and any errors encountered.
+
+- Relevant Interfaces or Methods:
+  - POST /api/admin/trigger-loyalty-processing: Define this endpoint in the AdminController class.
+  - LoyaltyService.triggerManualLoyaltyProcessing(): Use this method to process orders and calculate loyalty points.
+  - IdempotencyRecordRepository.existsByIdempotencyKey(): Check for existing records to enforce idempotency.
+  - AuditLogRepository.save(): Record audit logs for the operation.
+
+- Database Schema Changes:
+  - No changes to the database schema are required, as the existing IdempotencyRecord and AuditLog tables can support the new functionality.
+
+- Validations:
+  - Validate that the request is a POST request to the correct endpoint.
+  - Ensure that only orders with a PAID status are processed.
+  - Enforce the business cap on loyalty points for each customer during processing.
+  - Return appropriate error messages for invalid requests or processing failures.
+
+- Integration Points:
+  - Integrate with the existing LoyaltyService to calculate and award loyalty points.
+  - Use the IdempotencyRecordRepository to prevent duplicate processing.
+  - Log operation details using the AuditLogRepository for traceability.
+  - Provide real-time feedback to the client via the ResponseEntity object, including success or error status and the number of orders processed.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerLoyaltyProcessing(): ResponseEntity
+    }
+    class LoyaltyService {
+        +triggerManualLoyaltyProcessing(): int
+    }
+    class IdempotencyRecordRepository {
+        +existsByIdempotencyKey(key: String): boolean
+    }
+    class AuditLogRepository {
+        +save(log: AuditLog): void
+    }
+    AdminController --> LoyaltyService
+    AdminController --> IdempotencyRecordRepository
+    AdminController --> AuditLogRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    actor Admin
+    Admin ->> AdminController: POST /api/admin/trigger-loyalty-processing
+    AdminController ->> IdempotencyRecordRepository: Check idempotency key
+    IdempotencyRecordRepository -->> AdminController: Key exists or not
+    AdminController ->> LoyaltyService: triggerManualLoyaltyProcessing()
+    LoyaltyService ->> IdempotencyRecordRepository: Save idempotency record
+    LoyaltyService ->> AuditLogRepository: Log operation details
+    LoyaltyService -->> AdminController: Number of orders processed
+    AdminController -->> Admin: Response with status and details
+```
+
+
+## Log Audit Details for Scheduled Jobs
+
+This feature ensures that every execution of the nightly scheduled inventory replenishment job is logged with detailed audit information. The audit logs provide a record of the operation, including the time of execution, the type of operation, the initiator, and the outcome. This feature is essential for maintaining transparency and accountability in inventory management processes. It allows administrators to review past operations, identify issues, and ensure compliance with business policies. By capturing detailed logs, the system enhances traceability and supports troubleshooting efforts in case of errors or anomalies.
+
+### Technical Requirements
+
+
+## Handle Errors During Scheduled Jobs
+
+This feature ensures that errors occurring during scheduled jobs, such as nightly inventory replenishment, are handled gracefully. It includes mechanisms to log errors, notify administrators, and ensure the system remains operational. This is crucial for maintaining the reliability of automated processes and preventing disruptions in inventory management.
+
+### Technical Requirements
+
+
+## Provide Admin API for Scheduled Job Status
+
+This feature provides administrative APIs to manually trigger scheduled jobs such as inventory replenishment, loyalty points processing, and specific product replenishment. These APIs are essential for testing and development purposes, allowing administrators to verify the functionality of scheduled tasks without waiting for their automatic execution. By enabling manual triggers, the feature ensures that administrators can quickly identify and resolve issues, validate business logic, and maintain system reliability. The APIs return simple JSON responses to provide immediate feedback on the operation's success or failure, enhancing the user experience for administrative tasks.
+
+### Technical Requirements
+
+The implementation of the Admin API for Scheduled Job Status should adhere to the following technical requirements:
+
+- **Architecture Considerations**: The feature should integrate seamlessly with the existing Spring Boot REST architecture. It should leverage the existing `AdminController` class to define endpoints for triggering scheduled jobs. The implementation should ensure thread safety and transactional integrity, especially for operations that modify the database or trigger business logic.
+
+- **Involved Modules/Classes**: The `AdminController` class will handle the API endpoints. The `InventoryService` and `LoyaltyService` classes will be used to execute the business logic for inventory replenishment and loyalty points processing, respectively. The `ProductRepository` will be used to fetch and update product details for specific product replenishment.
+
+- **Relevant Interfaces or Methods**: The following methods in `AdminController` will be utilized or extended:
+  - `triggerReplenishment`: To trigger the inventory replenishment process.
+  - `triggerLoyaltyProcessing`: To trigger the loyalty points processing.
+  - `replenishProduct`: To replenish a specific product with a given quantity or a default quantity of 100.
+
+- **Database Schema Changes**: No changes to the database schema are required as the existing `Product` and `AuditLog` entities already support the necessary operations. The `AuditLog` entity will be used to log the operations performed by the APIs.
+
+- **Validations**: The following validations should be implemented:
+  - Validate that the `productId` exists in the database before attempting to replenish a product.
+  - Ensure that the `quantity` parameter is a positive integer. If not provided, default to 100.
+  - Handle exceptions gracefully and return appropriate error messages in the JSON response.
+
+- **Integration Points**: The APIs will integrate with the following components:
+  - `InventoryService` for triggering the inventory replenishment process.
+  - `LoyaltyService` for triggering the loyalty points processing.
+  - `ProductRepository` for fetching and updating product details.
+  - `AuditLogRepository` for logging the operations performed by the APIs.
+
+- **Error Handling**: The APIs should handle errors such as invalid `productId`, database connection issues, or business logic failures. Errors should be logged, and a JSON response with a status of 'error' and an appropriate message should be returned to the client.
+
+- **Security**: Ensure that only authenticated and authorized admin users can access these APIs. Implement role-based access control to restrict access to these endpoints.
+
+#### UML Diagram
+```mermaid
+classDiagram
+    class AdminController {
+        +triggerReplenishment() ResponseEntity
+        +triggerLoyaltyProcessing() ResponseEntity
+        +replenishProduct(productId: Long, quantity: int) ResponseEntity
+    }
+    class InventoryService {
+        +triggerManualReplenishment() void
+        +replenishProduct(productId: Long, quantity: int) void
+    }
+    class LoyaltyService {
+        +triggerManualLoyaltyProcessing() int
+    }
+    class ProductRepository {
+        +findById(productId: Long) Optional<Product>
+        +save(product: Product) Product
+    }
+    class AuditLogRepository {
+        +save(auditLog: AuditLog) AuditLog
+    }
+    AdminController --> InventoryService
+    AdminController --> LoyaltyService
+    AdminController --> ProductRepository
+    AdminController --> AuditLogRepository
+```
+
+#### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant AdminUser
+    participant AdminController
+    participant InventoryService
+    participant LoyaltyService
+    participant ProductRepository
+    participant AuditLogRepository
+
+    AdminUser ->> AdminController: POST /api/admin/trigger-replenishment
+    AdminController ->> InventoryService: triggerManualReplenishment()
+    InventoryService -->> AdminController: void
+    AdminController ->> AuditLogRepository: save(auditLog)
+    AdminController -->> AdminUser: JSON Response (success or error)
+
+    AdminUser ->> AdminController: POST /api/admin/trigger-loyalty-processing
+    AdminController ->> LoyaltyService: triggerManualLoyaltyProcessing()
+    LoyaltyService -->> AdminController: int
+    AdminController ->> AuditLogRepository: save(auditLog)
+    AdminController -->> AdminUser: JSON Response (success or error)
+
+    AdminUser ->> AdminController: POST /api/admin/replenish-product/{productId}
+    AdminController ->> ProductRepository: findById(productId)
+    ProductRepository -->> AdminController: Product
+    AdminController ->> InventoryService: replenishProduct(productId, quantity)
+    InventoryService -->> AdminController: void
+    AdminController ->> AuditLogRepository: save(auditLog)
+    AdminController -->> AdminUser: JSON Response (success or error)
+```
+
+
+## As a developer, I want to ensure that product creation handles duplicate SKUs gracefully, so that the system maintains data integrity.
+
+This feature ensures that the system validates the uniqueness of SKUs during product creation. When a user attempts to create a product with a SKU that already exists, the system will reject the request and provide a clear error message. This validation prevents data inconsistencies and ensures that each product can be uniquely identified within the system. By handling duplicate SKUs gracefully, the feature enhances the reliability of the product catalog and supports accurate inventory management. Additionally, error logging for duplicate SKU attempts aids in auditing and troubleshooting.
+
+### Technical Requirements
+
+
+## As a developer, I want to verify that order placement decrements stock atomically, so that inventory levels remain accurate.
+
+This feature ensures that stock levels are accurately managed during the order placement process. It validates that stock is decremented atomically, meaning the operation is performed as a single, indivisible transaction. This prevents inconsistencies in inventory levels due to system failures or retries. By enforcing atomicity, the feature guarantees that inventory remains accurate and reliable, even in complex scenarios involving idempotency keys or cancellations. This is crucial for maintaining trust in the system's inventory management and avoiding overselling or stock discrepancies.
+
+### Technical Requirements
+
+
+## As a developer, I want to test that loyalty points are capped at a maximum value, so that the system enforces business rules.
+
+This feature ensures that loyalty points awarded to customers are capped at a maximum value defined by the business configuration. It prevents customers from accumulating points beyond the allowed limit, maintaining fairness and compliance with business rules. The system calculates points based on the order total and enforces the cap during processing. This feature benefits users by ensuring accurate loyalty points management and prevents potential misuse or errors in points calculation.
+
+### Technical Requirements
+
+
+## As a developer, I want to ensure that insufficient stock during order placement rolls back the transaction, so that no partial updates occur.
+
+This feature ensures that when an order is placed with insufficient stock, the transaction is rolled back entirely to prevent any partial updates to the system. This is critical for maintaining data integrity and ensuring that customers do not experience issues such as incorrect stock levels or incomplete orders. By implementing this feature, developers can ensure that the system behaves predictably and reliably in scenarios where stock availability is insufficient.
+
+### Technical Requirements
+
+
+## As a developer, I want to validate that order cancellation restores stock and updates the order status, so that compensating actions are correctly applied.
+
+This feature ensures that when an order is canceled, the stock for the products in the order is restored to its original quantity, and the order status is updated to reflect the cancellation. This functionality is critical for maintaining accurate inventory levels and ensuring that compensating actions, such as stock restoration and audit logging, are applied correctly. It benefits users by preventing stock discrepancies and ensuring the system reflects the correct order status.
+
+### Technical Requirements
+
+
+## As a developer, I want to test that discount tiers are applied correctly based on order subtotal, so that customers receive accurate discounts.
+
+This feature ensures that discounts are applied accurately based on predefined tier thresholds for order subtotals. It calculates the discount amount by referencing configuration-driven business rules that define thresholds and corresponding discount rates. The feature is essential for maintaining customer trust and satisfaction by ensuring they receive the correct discount for their purchases. It also helps the business adhere to its promotional policies and prevents errors in discount calculations, which could lead to financial discrepancies or customer dissatisfaction.
+
+### Technical Requirements
+
+
+## As a developer, I want to verify that idempotency keys prevent duplicate order creation, so that the system avoids redundant operations.
+
+This feature ensures that the system uses idempotency keys to prevent duplicate order creation. When an order is created with an idempotency key, the system checks if an order with the same key already exists. If it does, the existing order is returned instead of creating a new one. This avoids redundant operations, ensures data consistency, and optimizes resource usage. Developers benefit from this feature by having a reliable mechanism to handle repeated requests without unintended side effects.
+
+### Technical Requirements
+
+
+## As a developer, I want to ensure that orders not in PAID status are not processed for loyalty points, so that only valid orders earn points.
+
+This feature ensures that only valid orders with a status of PAID are eligible for loyalty points processing. By excluding orders with other statuses such as PENDING, CANCELLED, SHIPPED, or REFUNDED, the system maintains the integrity of the loyalty program. This prevents errors, such as awarding points for invalid or incomplete transactions, and ensures that customers only earn points for completed and paid orders. This functionality benefits the business by upholding the rules of the loyalty program and avoiding potential disputes or inconsistencies in customer rewards.
+
+### Technical Requirements
+
+
+## As a developer, I want to validate that stock decrement fails gracefully when insufficient stock is available, so that users receive meaningful error messages.
+
+This feature ensures that stock decrement operations are robust and user-friendly by validating the available stock before proceeding. If the requested decrement quantity exceeds the available stock, the operation is aborted, and a meaningful error message is provided to the user. This prevents inconsistencies in stock data and enhances user experience by clearly communicating the issue. Additionally, failed operations are logged for auditing purposes, ensuring transparency and accountability.
+
+### Technical Requirements
+
+
+## As a developer, I want to test that duplicate SKU creation returns a conflict error, so that the system enforces SKU uniqueness.
+
+This feature ensures that the system enforces SKU uniqueness by validating product creation requests. When a developer attempts to create a product with a SKU that already exists in the database, the system will reject the request and return a conflict error. This validation prevents data inconsistencies and ensures that each product can be uniquely identified by its SKU. By implementing this feature, developers can maintain the integrity of the product catalog and avoid issues related to duplicate product entries.
+
+### Technical Requirements
