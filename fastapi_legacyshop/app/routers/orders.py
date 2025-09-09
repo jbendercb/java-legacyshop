@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, status, Response
 from sqlalchemy.orm import Session
 from ..db.session import get_db
 from ..schemas.order import OrderCreate, OrderOut
-from ..services.order_service import create_order as svc_create, get_order as svc_get, list_customer_orders as svc_list_by_customer
+from ..services.order_service import create_order as svc_create, get_order as svc_get, list_customer_orders as svc_list_by_customer, cancel_order as svc_cancel
 from ..services.payment_service import authorize_payment as svc_authorize
 
 router = APIRouter()
@@ -25,3 +25,7 @@ def get_orders_by_customer(email: str, db: Session = Depends(get_db)):
 @router.post("/orders/{order_id}/authorize-payment")
 def authorize_payment(order_id: int, db: Session = Depends(get_db)):
     return svc_authorize(db, order_id)
+
+@router.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: int, db: Session = Depends(get_db)):
+    return svc_cancel(db, order_id)

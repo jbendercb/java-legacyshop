@@ -1,3 +1,14 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from ..db.session import get_db
+from ..services import inventory_service as inv
+
+router = APIRouter()
+
+@router.post("/admin/replenish-product/{productId}")
+def replenish_product(productId: int, quantity: int = Query(100, ge=1), db: Session = Depends(get_db)):
+    return inv.replenish_product(db, productId, quantity)
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..db.session import get_db

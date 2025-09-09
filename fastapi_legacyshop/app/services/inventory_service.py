@@ -1,4 +1,16 @@
 from sqlalchemy.orm import Session
+from ..models.product import Product
+from ..utils.problem_details import ResourceNotFoundError
+
+def replenish_product(db: Session, product_id: int, quantity: int):
+    prod = db.get(Product, product_id)
+    if not prod:
+        raise ResourceNotFoundError("Product not found")
+    prod.stock_quantity += quantity
+    db.commit()
+    return {"productId": prod.id, "newStock": prod.stock_quantity}
+
+from sqlalchemy.orm import Session
 from sqlalchemy import select
 from ..models.product import Product
 from ..models.audit_log import AuditLog

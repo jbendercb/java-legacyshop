@@ -1,3 +1,5 @@
+from ..models.payment import Payment, PaymentStatus
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from decimal import Decimal
@@ -115,6 +117,33 @@ def get_order(db: Session, order_id: int) -> dict:
             for it in order.items
         ],
     }
+def cancel_order(db: Session, order_id: int) -> dict:
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id == order_id)
+        .first()
+    )
+    if not order:
+        raise ResourceNotFoundError("Order not found")
+    if order.status == OrderStatus.CANCELLED:
+        return get_order(db, order_id)
+    for it in order.items:
+        prod = db.get(Product, it.product_id)
+        if prod:
+            prod.stock_quantity += it.quantity
+    pay = db.query(Payment).filter(Payment.order_id == order.id).first()
+    if pay and pay.status == PaymentStatus.AUTHORIZED and pay.external_authorization_id:
+        try:
+            from .payment_service import void_authorization
+            void_authorization(pay.external_authorization_id)
+            pay.status = PaymentStatus.VOIDED
+        except Exception:
+            pass
+    order.status = OrderStatus.CANCELLED
+    db.commit()
+    return get_order(db, order_id)
+
 
 def list_customer_orders(db: Session, email: str) -> list[dict]:
     from ..repositories.order_repository import get_by_customer_email

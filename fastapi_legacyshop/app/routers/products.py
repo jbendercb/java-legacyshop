@@ -1,3 +1,22 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from ..db.session import get_db
+from ..repositories import product_repository as repo
+from ..utils.problem_details import ResourceNotFoundError
+
+router = APIRouter()
+
+@router.get("/products/by-sku/{sku}")
+def get_by_sku(sku: str, db: Session = Depends(get_db)):
+    p = repo.get_by_sku(db, sku)
+    if not p:
+        raise ResourceNotFoundError(f"Product with SKU {sku} not found")
+    return p
+
+@router.get("/products/search")
+def search_products(name: str = Query(...), page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=200), db: Session = Depends(get_db)):
+    return repo.search_by_name(db, name=name, page=page, size=size)
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from ..db.session import get_db
