@@ -248,10 +248,12 @@ class OrderService:
         db.add(order)
         await db.flush()
         
+        total_subtotal = Decimal("0.00")
         for item_request in request.items:
-            await OrderService._process_order_item(db, order, item_request)
+            item_subtotal = await OrderService._process_order_item(db, order, item_request)
+            total_subtotal += item_subtotal
         
-        order.calculate_totals()
+        order.subtotal = total_subtotal
         discount_amount = DiscountService.calculate_discount(order.subtotal)
         order.apply_discount(discount_amount)
         
@@ -283,7 +285,7 @@ class OrderService:
         db: AsyncSession,
         order: OrderEntity,
         item_request
-    ):
+    ) -> Decimal:
         """Process individual order item with validation and atomic stock decrement"""
         result = await db.execute(select(Product).where(Product.sku == item_request.product_sku))
         product = result.scalar_one_or_none()
@@ -301,6 +303,7 @@ class OrderService:
             )
         
         unit_price = product.price
+        item_subtotal = unit_price * item_request.quantity
         
         order_item = OrderItem(
             order_id=order.id,
@@ -309,13 +312,14 @@ class OrderService:
             product_name=product.name,
             quantity=item_request.quantity,
             unit_price=unit_price,
-            subtotal=unit_price * item_request.quantity
+            subtotal=item_subtotal
         )
         db.add(order_item)
-        order.items.append(order_item)
         
         product.decrement_stock(item_request.quantity)
         await db.flush()
+        
+        return item_subtotal
     
     @staticmethod
     async def get_order(db: AsyncSession, order_id: int) -> OrderEntity:

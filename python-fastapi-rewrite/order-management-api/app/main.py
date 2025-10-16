@@ -90,6 +90,25 @@ async def healthz():
     return {"status": "ok"}
 
 
+@app.post("/api/admin/seed-test-data")
+async def seed_test_data(db: AsyncSession = Depends(get_db)):
+    """Seed test data for development/testing"""
+    from app.models import Product
+    from decimal import Decimal
+    
+    products = [
+        Product(sku="LAPTOP-001", name="Gaming Laptop", price=Decimal("1200.00"), stock_quantity=10, active=True),
+        Product(sku="MOUSE-001", name="Wireless Mouse", price=Decimal("25.00"), stock_quantity=50, active=True),
+        Product(sku="KEYBOARD-001", name="Mechanical Keyboard", price=Decimal("75.00"), stock_quantity=30, active=True),
+        Product(sku="MONITOR-001", name="4K Monitor", price=Decimal("400.00"), stock_quantity=20, active=True),
+    ]
+    
+    db.add_all(products)
+    await db.flush()
+    
+    return {"status": "success", "products_created": len(products)}
+
+
 @app.post("/api/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(
     request: OrderCreateRequest,
