@@ -1,0 +1,116 @@
+
+[1m[94m====================================================================================================[0m
+[1m[94m                          COMPREHENSIVE BEHAVIORAL EQUIVALENCE TEST SUITE                           [0m
+[1m[94m====================================================================================================[0m
+
+Java API:   http://localhost:8080
+Python API: http://localhost:9000
+Test Time:  2025-10-20T14:00:21.379568
+
+Based on CoreStory Project #75 specifications
+
+[1m[94m====================================================================================================[0m
+[1m[94m                         1. DISCOUNT CALCULATION - ALL TIERS AND EDGE CASES                         [0m
+[1m[94m====================================================================================================[0m
+
+
+[96m[1mTier 1: < $50 (No Discount)[0m
+[96m---------------------------[0m
+[92m✅ PASS[0m | Order < $50 (no discount)
+  [92mJava: $49.99 → discount $0.00 | Python: $47.50[0m
+
+[96m[1mTier 2: >= $50 (5% Discount)[0m
+[96m----------------------------[0m
+[91m❌ FAIL[0m | Order at exactly $50 (5% discount)
+  [93mJava: $1299.99 subtotal, 15% discount = $1104.99 | Python: $47.50[0m
+
+[96m[1mTier 3: >= $100 (10% Discount)[0m
+[96m------------------------------[0m
+[91m❌ FAIL[0m | Order at exactly $100 (10% discount)
+  [93mJava: $1299.99 subtotal, 15% discount = $1104.99 | Python: $90.00[0m
+
+[96m[1mTier 4: >= $200 (15% Discount)[0m
+[96m------------------------------[0m
+[92m✅ PASS[0m | Order at exactly $200 (15% discount)
+  [92mJava: $2599.98 subtotal, 15% discount = $2209.98 | Python: $170.00[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                           2. IDEMPOTENCY - DUPLICATE KEYS AND EDGE CASES                           [0m
+[1m[94m====================================================================================================[0m
+
+[92m✅ PASS[0m | Duplicate idempotency key
+  [92mJava: 201→200 (IDs: 15==15) | Python: 201→409[0m
+[91m❌ FAIL[0m | Missing idempotency key
+  [93mJava: 201, Python: 400[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                         3. STOCK VALIDATION - INSUFFICIENT AND EDGE CASES                          [0m
+[1m[94m====================================================================================================[0m
+
+[91m❌ FAIL[0m | Insufficient stock
+  [93mJava: 400, Python: 409[0m
+[92m✅ PASS[0m | Exact stock match
+  [92mSkipped - requires dynamic stock query[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                             4. INPUT VALIDATION - ALL VALIDATION RULES                             [0m
+[1m[94m====================================================================================================[0m
+
+[92m✅ PASS[0m | Invalid email format
+  [92mJava: 400, Python: 422[0m
+[92m✅ PASS[0m | Zero quantity validation
+  [92mJava: 400, Python: 422[0m
+[92m✅ PASS[0m | Negative quantity validation
+  [92mJava: 400, Python: 422[0m
+[92m✅ PASS[0m | Empty items list
+  [92mJava: 400, Python: 422[0m
+[92m✅ PASS[0m | Invalid product ID
+  [92mJava: 404, Python: 404[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                                   5. ORDER RETRIEVAL - GET BY ID                                   [0m
+[1m[94m====================================================================================================[0m
+
+[92m✅ PASS[0m | Order retrieval (GET by ID)
+  [92mJava: 200, Python: 200[0m
+[92m✅ PASS[0m | Order not found (404)
+  [92mJava: 404, Python: 404[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                                  6. PAGINATION - CUSTOMER ORDERS                                   [0m
+[1m[94m====================================================================================================[0m
+
+[92m✅ PASS[0m | Customer orders pagination
+  [92mJava: 200 (3 orders), Python: 200 (3 orders)[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                             7. ORDER CANCELLATION - COMPENSATION LOGIC                             [0m
+[1m[94m====================================================================================================[0m
+
+[92m✅ PASS[0m | Order cancellation
+  [92mJava: 200, Python: 200[0m
+[91m❌ FAIL[0m | Double cancellation (409)
+  [93mJava: wrong status, Python: 409[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                                8. ERROR HANDLING - RFC-7807 FORMAT                                 [0m
+[1m[94m====================================================================================================[0m
+
+[91m❌ FAIL[0m | RFC-7807 error format
+  [93mJava: True (has RFC-7807 fields), Python: False (has RFC-7807 fields)[0m
+
+[1m[94m====================================================================================================[0m
+[1m[94m                                     COMPREHENSIVE TEST SUMMARY                                     [0m
+[1m[94m====================================================================================================[0m
+
+Total Business Scenarios Tested:  19
+[92mPassed:                            13[0m
+[91mFailed:                            6[0m
+Behavioral Equivalence Score:      68.4%
+
+
+[1mCritical Business Logic Tests:[0m
+  Passed: 6/11 (55%)
+
+[91m[1m❌ BEHAVIORAL EQUIVALENCE NOT VERIFIED[0m
+Only 68% compatibility - significant differences detected
