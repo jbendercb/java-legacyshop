@@ -1,55 +1,59 @@
+# Application configuration
+application:
+  version: ${project.version:0.0.1-SNAPSHOT}
+
+# Spring Boot Configuration
 spring:
-  mvc:
-    problemdetails:
-      enabled: true
+  application:
+    name: legacy-shop
+
+  # H2 Database (PostgreSQL compatibility mode)
   datasource:
-    url: jdbc:h2:mem:legacyshop;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
+    url: jdbc:h2:mem:legacyshop;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # JPA Configuration
   jpa:
     hibernate:
       ddl-auto: none
-    open-in-view: false
-  sql:
-    init:
-      mode: always
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: public
+
+  # H2 Console (development only)
   h2:
     console:
       enabled: true
+      path: /h2-console
 
-# Business Configuration - Key to demonstrating config-driven promotions
+# Business Rules Configuration
 business:
+  # Tiered discount configuration
   promotions:
-    # Discount tiers based on order total
     tier1:
       threshold: 50.00
-      discount: 0.05  # 5%
+      discount: 0.05
     tier2:
       threshold: 100.00
-      discount: 0.10  # 10%
+      discount: 0.10
     tier3:
       threshold: 200.00
-      discount: 0.15  # 15%
-  
+      discount: 0.15
+
+  # Loyalty points configuration
   loyalty:
-    # Points earned per dollar spent (after PAID status)
     points-per-dollar: 1.0
-    # Maximum points a customer can accumulate
     max-points: 500
-  
+
+  # Payment service configuration
   payments:
-    # Mock external payment service URL
-    auth-url: "http://localhost:8080/mock/payment/authorize"
-    # Timeout for payment calls
+    auth-url: http://localhost:8080/mock/payment/authorize
     timeout-seconds: 10
-  
+
+  # Inventory configuration
   inventory:
-    # Default restock quantity for scheduled replenishment
     default-restock-quantity: 100
-
-server:
-  port: 8080
-
-logging:
-  level:
-    com.example.legacyshop: DEBUG
-    org.springframework.retry: DEBUG
