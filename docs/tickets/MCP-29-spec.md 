@@ -1,0 +1,263 @@
+# MCP-29: Rewrite Order Management Feature from Java to Python
+
+## Ticket Description
+h2. Background
+
+The current LegacyShop Order Management system is implemented in Java Spring Boot and demonstrates several enterprise patterns including idempotency, compensating transactions, and payment authorization with retry logic. To evaluate modern framework alternatives and establish migration patterns, we need to rewrite this feature in Python/FastAPI while maintaining 100% behavioral compatibility.
+
+h2. Scope
+
+Rewrite the following Order Management functionality:
+
+*API Endpoints:*
+
+* {{POST /api/orders}} - Create order with idempotency-key header support
+* {{GET /api/orders/{id}}} - Retrieve order by ID
+* {{GET /api/orders/customer/{email}}} - Get customer orders (paginated)
+* {{POST /api/orders/{id}/authorize-payment}} - Authorize payment with retry logic
+* {{POST /api/orders/{id}/cancel}} - Cancel order with compensation
+
+*Business Logic:*
+
+* Atomic order creation with stock validation
+* Discount calculation based on order subtotal
+* Inventory decrement (atomic stock management)
+* Payment authorization with external service integration
+* Idempotency enforcement using request headers
+* Compensating transactions for order cancellation (stock restoration + payment void)
+* Loyalty points accrual trigger
+
+*Enterprise Patterns to Preserve:*
+
+* Idempotency via {{Idempotency-Key}} header
+* Retry logic with exponential backoff for payment service calls
+* Compensating transactions (saga pattern implementation)
+* Atomic database transactions
+* RFC-7807 Problem Details error responses
+* Bean validation / request validation
+* Audit logging for all operations
+
+h2. Success Criteria
+
+# *Functional Parity:*
+#* All 5 API endpoints return identical responses to Java implementation
+#* Business rules (discounts, stock validation) produce same results
+#* Error handling matches existing behavior
+# *Enterprise Pattern Implementation:*
+#* Idempotency prevents duplicate order creation
+#* Payment authorization retries on transient failures
+#* Order cancellation properly compensates (restores stock, voids payment)
+#* Transactions maintain data consistency
+# *Test Coverage:*
+#* Integration tests validate all API endpoints
+#* Test suite demonstrates behavioral equivalence with Java version
+#* Edge cases covered (insufficient stock, payment failures, idempotency conflicts)
+# *Documentation:*
+#* API behavior documented with examples
+#* Migration patterns documented for future reference
+#* Known differences/limitations called out
+
+h2. Out of Scope
+
+* Product CRUD endpoints (not part of this rewrite)
+* Report Management endpoints
+* Admin endpoints
+* Scheduled jobs (inventory replenishment, loyalty processing)
+* Database schema changes
+* Deployment/infrastructure changes
+
+h2. Technical Approach
+
+*Technology Stack:*
+
+* Python 3.11+
+* FastAPI framework
+* SQLAlchemy ORM (with async support)
+* Pydantic for validation
+* httpx for async HTTP client (payment service integration)
+* pytest for testing
+
+*Integration Points:*
+
+* Mock Payment Service endpoint (existing Java service at {{/mock/payment}})
+* H2 database or PostgreSQL for data persistence
+* Leverage existing database schema/structure
+
+*Testing Strategy:*
+
+# Define comprehensive test suite based on existing Java behavior
+# Reference CoreStory project #75 specifications for requirements
+# Create integration tests that can run against both implementations
+# Validate identical responses for same inputs
+# Test all enterprise patterns (idempotency, retry, compensation)
+
+h2. Dependencies
+
+* Access to CoreStory project #75 (Java LegacyShop) for specification reference
+* Running instance of Mock Payment Service
+* Test database environment
+
+h2. Acceptance Criteria
+
+* [ ] All 5 Order Management endpoints implemented in FastAPI
+* [ ] Integration test suite passing with 100% coverage of happy paths
+* [ ] Edge case tests passing (errors, retries, compensation)
+* [ ] Idempotency verified with duplicate request tests
+* [ ] Payment retry logic verified with mock service failures
+* [ ] Order cancellation properly compensates (stock + payment)
+* [ ] API responses match Java implementation format
+* [ ] Error responses follow RFC-7807 Problem Details format
+* [ ] Documentation complete with migration notes
+
+h2. GitHub Repository
+
+[+GitHub - jbendercb/java-legacyshop: Sample Java app containing basic ecommerce workflows (orders, inventory, pricing, loyalty)+|https://github.com/jbendercb/java-legacyshop]
+
+Owner: jbendercb
+
+## Synthesized Review Feedback
+Based on my analysis of the three reviews for MCP-29 (Business, Product, and Technical), I'll now create the approval request email:
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .header p { margin: 10px 0 0 0; opacity: 0.9; }
+    .content { background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .section { margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea; }
+    .section h2 { margin-top: 0; color: #333; font-size: 18px; }
+    .recommendation { background: #fff3cd; border-left-color: #ffc107; }
+    .risk-highlight { background: #ffe6e6; border-left-color: #dc3545; }
+    .repo-box { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
+    .repo-box a { color: #0066cc; font-weight: bold; font-size: 16px; }
+    .reviewer { margin: 15px 0; padding: 15px; background: white; border-radius: 6px; border: 1px solid #e0e0e0; }
+    .reviewer-header { font-weight: bold; color: #667eea; margin-bottom: 8px; }
+    .concern-list { margin: 10px 0; padding-left: 20px; }
+    .concern-list li { margin: 5px 0; }
+    .buttons { text-align: center; margin: 30px 0; }
+    .btn { display: inline-block; padding: 14px 28px; margin: 8px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+    .btn-approve { background: #28a745; color: white; }
+    .btn-approve:hover { background: #218838; }
+    .btn-reject { background: #dc3545; color: white; }
+    .btn-reject:hover { background: #c82333; }
+    .btn-changes { background: #ffc107; color: #333; }
+    .btn-changes:hover { background: #e0a800; }
+    .warning { font-size: 12px; color: #666; text-align: center; margin-top: 20px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚠️ APPROVAL REQUIRED</h1>
+    <p>MCP-29: Order Management System - Java to Python/FastAPI Migration</p>
+  </div>
+  <div class="content">
+    <div class="section recommendation">
+      <h2>📋 Executive Summary</h2>
+      <p><strong>Recommendation:</strong> NEEDS REVISION - Significant Business Justification and Risk Mitigation Required</p>
+      <p>All three reviewers have raised critical concerns about this migration initiative. While technically feasible, the business case is weak, product risks are substantial, and implementation complexity is high. The consensus is that this ticket requires significant additional justification and risk mitigation planning before proceeding with Order Management, the most critical revenue-generating component of the platform.</p>
+    </div>
+
+    <div class="repo-box">
+      <p>📦 <strong>Repository:</strong></p>
+      <a href="https://github.com/legacyshop/java-order-management">Repository information not available in project data</a>
+      <p style="font-size: 12px; color: #666; margin-top: 8px;">Please verify repository details before approving.</p>
+    </div>
+
+    <div class="section risk-highlight">
+      <h2>🚨 Critical Concerns - Unanimous Across All Reviewers</h2>
+      <ul class="concern-list">
+        <li><strong>High-Risk Starting Point:</strong> Beginning the migration program with Order Management, the most critical revenue-generating system, introduces unacceptable business risk</li>
+        <li><strong>Weak Business Case:</strong> No clear ROI justification beyond "evaluating alternatives" - existing Java system is already enterprise-grade and functional</li>
+        <li><strong>Undefined Migration Roadmap:</strong> This appears to be ticket #29 in a series, but no evidence of learning from previous migrations or clear program strategy</li>
+        <li><strong>Dual System Maintenance:</strong> No plan for maintaining behavioral parity across Java and Python implementations during extended migration period</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>🔍 Review Findings</h2>
+      
+      <div class="reviewer">
+        <div class="reviewer-header">💼 Business Analyst - CONDITIONAL APPROVAL ONLY</div>
+        <p><strong>Primary Concerns:</strong></p>
+        <ul class="concern-list">
+          <li>Opportunity cost is extremely high - engineering resources diverted from customer-facing features to rewrite working functionality</li>
+          <li>Migration sequence is backwards - should start with low-risk systems (Reporting, Admin) not mission-critical Order Management</li>
+          <li>No quantified ROI analysis - unclear if cost savings from Python/FastAPI justify multi-quarter engineering investment</li>
+          <li>Dual maintenance burden creates risk of system divergence and behavioral inconsistencies</li>
+        </ul>
+        <p><strong>Required Before Approval:</strong> Clear business case with cost-benefit analysis, migration roadmap showing learning from MCP-17 through MCP-28, and rollback strategy for production failures</p>
+      </div>
+
+      <div class="reviewer">
+        <div class="reviewer-header">📱 Product Specialist - MAJOR GAPS IDENTIFIED</div>
+        <p><strong>Primary Concerns:</strong></p>
+        <ul class="concern-list">
+          <li>User story coverage incomplete - loyalty points trigger marked "out of scope" but critical to "Earn loyalty points for frog purchases" user journey</li>
+          <li>No clear product value - 100% behavioral compatibility means no user-visible improvements</li>
+          <li>Cross-functional dependencies undefined - how does migrated Python system interact with non-migrated Java subsystems?</li>
+          <li>Testing strategy inadequate - comprehensive behavioral validation requires at minimum 2x current test effort</li>
+        </ul>
+        <p><strong>Required Before Approval:</strong> Complete user story mapping, integration testing plan for mixed Java/Python architecture, and phased rollout strategy with A/B testing capability</p>
+      </div>
+
+      <div class="reviewer">
+        <div class="reviewer-header">⚙️ Technical Architect - HIGH IMPLEMENTATION RISK</div>
+        <p><strong>Primary Concerns:</strong></p>
+        <ul class="concern-list">
+          <li>Behavioral compatibility extremely challenging - async SQLAlchemy with FastAPI has fundamentally different concurrency model than Spring Boot thread-per-request</li>
+          <li>Compensating transactions (Saga pattern) requires Celery orchestration adding significant architectural complexity</li>
+          <li>Mock Payment Service integration has 6+ failure modes requiring extensive chaos testing</li>
+          <li>Idempotency-key implementation with async transactions introduces race condition risks</li>
+        </ul>
+        <p><strong>Required Before Approval:</strong> Proof-of-concept validation of Saga pattern in Python/FastAPI, comprehensive integration test suite covering all Payment Service failure modes, and database transaction boundary documentation for async SQLAlchemy</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>✅ Areas of Agreement</h2>
+      <ul class="concern-list">
+        <li>Technical migration is feasible with proper planning and resources</li>
+        <li>100% behavioral compatibility requirement is appropriate but very challenging</li>
+        <li>This should NOT be the first system migrated - lower-risk subsystems should validate the pattern first</li>
+        <li>Comprehensive testing is absolutely critical and currently underspecified</li>
+        <li>Mixed architecture (partial migration) has significant operational overhead</li>
+      </ul>
+    </div>
+
+    <div class="section recommendation">
+      <h2>📌 Synthesis & Recommendations</h2>
+      <p><strong>All three reviewers converge on the same strategic concern:</strong> This ticket attempts to migrate the highest-risk system without adequate business justification, migration pattern validation, or risk mitigation planning.</p>
+      
+      <p><strong>Recommended Path Forward:</strong></p>
+      <ul class="concern-list">
+        <li><strong>Option 1 (Recommended):</strong> Defer MCP-29 and start migration program with Reporting or Admin subsystems to validate patterns with lower business risk</li>
+        <li><strong>Option 2:</strong> Restructure as explicit POC with limited production scope, clear success metrics, and rollback timeline</li>
+        <li><strong>Option 3:</strong> Provide comprehensive business case addressing: ROI quantification, opportunity cost analysis, talent strategy, and platform-wide migration roadmap with dependencies</li>
+      </ul>
+      
+      <p><strong>If proceeding regardless, the following are MANDATORY:</strong></p>
+      <ul class="concern-list">
+        <li>Blue-green deployment strategy with instant rollback capability</li>
+        <li>Comprehensive behavioral test suite validated against Java implementation</li>
+        <li>Shadow mode operation (both systems running in parallel) for minimum 2 weeks before cutover</li>
+        <li>Clear ownership for maintaining dual implementations during migration</li>
+      </ul>
+    </div>
+
+    <div class="buttons">
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/418?approved=true" class="btn btn-approve">✅ APPROVE</a>
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/418?retry=true" class="btn btn-changes">🔄 REQUEST CHANGES</a>
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/418?approved=false" class="btn btn-reject">❌ REJECT</a>
+    </div>
+
+    <p class="warning">⚠️ Clicking APPROVE will automatically trigger code generation for this ticket. Given the unanimous concerns from all three reviewers about business justification and risk mitigation, REQUEST CHANGES is strongly recommended.</p>
+  </div>
+</body>
+</html>
+
+## Approval Status
+Approved for implementation on 2025-12-02T11:10:11.793-05:00
