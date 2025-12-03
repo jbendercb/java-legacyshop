@@ -1,0 +1,149 @@
+# MCP-32: Add Health Check Endpoint with Build Info
+
+## Ticket Description
+*Description*
+
+  Add a /api/health endpoint to the LegacyShop application that returns system health information.
+
+ 
+
+  *Requirements:*
+
+ 
+
+# Create a new REST endpoint GET /api/health
+
+# Return JSON response with:
+
+* status: "UP" or "DOWN"
+
+* timestamp: Current ISO-8601 timestamp
+
+* version: Application version from pom.xml
+
+* database: Database connection status
+
+# No authentication required for this endpoint
+
+# Include appropriate unit test
+
+ 
+
+  *Expected Response:*
+
+  {
+
+    "status": "UP",
+
+    "timestamp": "2025-12-02T10:30:00Z",
+
+    "version": "1.0.0",
+
+    "database": "connected"
+
+  }
+
+ 
+
+  *Acceptance Criteria:*
+
+* Endpoint returns 200 OK when healthy
+
+* Endpoint returns 503 when database unavailable
+
+* Unit test covers both scenarios
+
+ 
+
+  *GitHub Repository:* [+GitHub - jbendercb/java-legacyshop: Sample Java app containing basic ecommerce workflows (orders, inventory, pricing, loyalty)+|https://github.com/jbendercb/java-legacyshop]
+
+CoreStory Project ID: 75
+
+## Synthesized Review Feedback
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .header p { margin: 10px 0 0 0; opacity: 0.9; }
+    .content { background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .section { margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea; }
+    .section h2 { margin-top: 0; color: #333; font-size: 18px; }
+    .recommendation { background: #fff3cd; border-left-color: #ffc107; }
+    .repo-box { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
+    .repo-box a { color: #0066cc; font-weight: bold; font-size: 16px; }
+    .reviewer { margin: 15px 0; padding: 15px; background: white; border-radius: 6px; border: 1px solid #e0e0e0; }
+    .reviewer-header { font-weight: bold; color: #667eea; margin-bottom: 8px; }
+    .buttons { text-align: center; margin: 30px 0; }
+    .btn { display: inline-block; padding: 14px 28px; margin: 8px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+    .btn-approve { background: #28a745; color: white; }
+    .btn-approve:hover { background: #218838; }
+    .btn-reject { background: #dc3545; color: white; }
+    .btn-reject:hover { background: #c82333; }
+    .btn-changes { background: #ffc107; color: #333; }
+    .btn-changes:hover { background: #e0a800; }
+    .warning { font-size: 12px; color: #666; text-align: center; margin-top: 20px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚠️ APPROVAL REQUIRED</h1>
+    <p>MCP-32: Add Health Endpoint to LegacyShop Application</p>
+  </div>
+  <div class="content">
+    <div class="section recommendation">
+      <h2>📋 Executive Summary</h2>
+      <p><strong>Recommendation:</strong> APPROVE WITH CONDITIONS</p>
+      <p>All three reviewers unanimously recommend implementing the /api/health endpoint as a high-value, low-effort initiative that addresses a critical observability gap in the LegacyShop platform. The endpoint will enable proactive monitoring, faster incident response, and improved system reliability with minimal implementation effort (1-2 days).</p>
+    </div>
+
+    <div class="repo-box">
+      <p>📦 <strong>Repository:</strong></p>
+      <a href="https://github.com/legacyshop/java-application">Repository information not available in project documentation</a>
+      <p style="font-size: 12px; color: #666; margin-top: 8px;">Please confirm the repository details before approving.</p>
+    </div>
+
+    <div class="section">
+      <h2>🔍 Review Findings</h2>
+      <div class="reviewer">
+        <div class="reviewer-header">💼 Business Analyst</div>
+        <p><strong>Business Value Score: 8/10.</strong> The health endpoint addresses a foundational need for monitoring mission-critical e-commerce functions. It aligns strongly with LegacyShop's scalability and reliability objectives, providing significant ROI through reduced downtime and compliance support. Key recommendations: prioritize implementation immediately, implement rate-limiting for security, and integrate with monitoring tools like Prometheus or Datadog.</p>
+      </div>
+      <div class="reviewer">
+        <div class="reviewer-header">📱 Product Specialist</div>
+        <p><strong>Infrastructure/Operational Feature.</strong> This endpoint is not customer-facing but supports backend reliability that indirectly benefits all users. It aligns with system-level goals for maintainability and uptime. Key consideration: the unauthenticated nature raises security concerns; recommend IP whitelisting or network-level restrictions. Follow RESTful conventions and minimize information exposure to prevent reconnaissance attacks.</p>
+      </div>
+      <div class="reviewer">
+        <div class="reviewer-header">⚙️ Technical Architect</div>
+        <p><strong>Implementation Feasible.</strong> The Spring Boot architecture supports this feature through either Spring Boot Actuator (recommended if already in use) or a custom endpoint. Use simple database validation (SELECT 1), expose version via BuildProperties, and ensure sub-100ms response times. Critical: implement comprehensive testing (unit, integration), optimize for high request volume from load balancers, and update API documentation and operational runbooks.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🔑 Key Conditions for Approval</h2>
+      <ul>
+        <li><strong>Security Controls:</strong> Implement rate-limiting and IP whitelisting to prevent abuse of the unauthenticated endpoint</li>
+        <li><strong>Information Minimization:</strong> Ensure response contains only necessary details (status, timestamp, version, basic DB status) without exposing sensitive system internals</li>
+        <li><strong>Testing Coverage:</strong> Include unit tests (as specified) plus integration tests to validate database health checks</li>
+        <li><strong>Performance Optimization:</strong> Target sub-100ms response times using lightweight database validation queries</li>
+        <li><strong>Documentation:</strong> Update API documentation and operational runbooks before deployment</li>
+        <li><strong>Monitoring Integration:</strong> Coordinate with DevOps to configure load balancer health checks and alerting</li>
+      </ul>
+    </div>
+
+    <div class="buttons">
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/452?approved=true" class="btn btn-approve">✅ APPROVE</a>
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/452?retry=true" class="btn btn-changes">🔄 REQUEST CHANGES</a>
+      <a href="https://corestory.app.n8n.cloud/webhook-waiting/452?approved=false" class="btn btn-reject">❌ REJECT</a>
+    </div>
+
+    <p class="warning">⚠️ Clicking APPROVE will automatically trigger code generation for this ticket.</p>
+  </div>
+</body>
+</html>
+
+## Approval Status
+Approved for implementation on 2025-12-03T15:20:59.718-05:00
